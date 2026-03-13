@@ -146,22 +146,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await engine.unload()
 
 
+API_TOKEN = os.getenv("FOUNDRY_VOX_API_TOKEN")
 app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+cors_kwargs = {
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+
+if API_TOKEN:
+    cors_kwargs["allow_origins"] = [
+        "http://tauri.localhost",
+        "tauri://localhost",
+    ]
+else:
+    cors_kwargs["allow_origins"] = [
         "http://localhost",
         "http://127.0.0.1",
         "http://tauri.localhost",
         "tauri://localhost",
-    ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    ]
+    cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
-API_TOKEN = os.getenv("FOUNDRY_VOX_API_TOKEN")
+app.add_middleware(CORSMiddleware, **cors_kwargs)
 
 
 @app.middleware("http")
@@ -170,10 +177,6 @@ async def require_runtime_token(request: Request, call_next: object) -> Response
         return await call_next(request)
 
     if request.method == "OPTIONS":
-        return await call_next(request)
-
-    path = request.url.path
-    if path.endswith("/health"):
         return await call_next(request)
 
     header_token = request.headers.get("x-foundry-vox-token")
