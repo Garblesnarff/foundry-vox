@@ -8,6 +8,7 @@ use std::net::TcpListener;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use tokio::time::sleep;
@@ -159,6 +160,19 @@ async fn backend_get_health(
     client: State<'_, BackendClient>,
 ) -> Result<Value, String> {
     backend_request(&runtime, &client, Method::GET, "/health", None).await
+}
+
+#[tauri::command]
+fn open_models_directory(app: tauri::AppHandle) -> Result<(), String> {
+    let app_data_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?;
+    let models_dir = app_data_dir.join("models");
+    std::fs::create_dir_all(&models_dir).map_err(|error| error.to_string())?;
+    app.opener()
+        .open_path(models_dir.to_string_lossy().to_string(), None::<String>)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -557,6 +571,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let api_port = if cfg!(debug_assertions) { 3456 } else { open_loopback_port()? };
@@ -588,6 +603,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            open_models_directory,
             backend_get_health,
             backend_get_settings,
             backend_patch_settings,

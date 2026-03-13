@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
@@ -178,6 +178,10 @@ export default function App() {
   const latestGeneration = useMemo(() => history[0] ?? null, [history]);
   const recentGenerations = useMemo(() => history.slice(0, 3), [history]);
   const setupActions = health?.setup_actions ?? [];
+  const modelsDirectory = useMemo(
+    () => setupActions.find((action) => action.startsWith("App models directory: "))?.replace("App models directory: ", "") ?? null,
+    [setupActions],
+  );
   const engineReady = health?.status === "ready";
   const engineWarming = health?.status === "warming_up" || health?.status === "loading";
   const setupChecklist = [
@@ -404,6 +408,14 @@ export default function App() {
     }
   }
 
+  async function handleOpenModelsDirectory() {
+    try {
+      await invoke("open_models_directory");
+    } catch {
+      setError("Unable to open the models folder.");
+    }
+  }
+
   async function handlePasteScript() {
     try {
       const clipboardText = await navigator.clipboard.readText();
@@ -517,6 +529,13 @@ export default function App() {
                     {action}
                   </div>
                 ))}
+              </div>
+            ) : null}
+            {modelsDirectory ? (
+              <div className="setup-button-row">
+                <button className="micro-button accent" onClick={() => void handleOpenModelsDirectory()}>
+                  Open models folder
+                </button>
               </div>
             ) : null}
             <div className="setup-checklist">

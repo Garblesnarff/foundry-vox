@@ -354,6 +354,12 @@ input::placeholder {
   flex-wrap: wrap;
 }
 
+.setup-button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .setup-meta {
   color: var(--text-dim);
   font-size: 11px;
