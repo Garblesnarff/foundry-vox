@@ -1,6 +1,13 @@
 # Foundry Vox
 
-Foundry Vox is a macOS desktop app for local text-to-speech generation with a Tauri frontend and a FastAPI sidecar backend, built from [`PRD.md`](/Users/rob/Claude/vox/PRD.md).
+Foundry Vox is a macOS desktop app for local text-to-speech generation, built from [`PRD.md`](/Users/rob/Claude/vox/PRD.md).
+
+The current app uses a hybrid desktop architecture:
+- Tauri/Rust is the native app shell and primary app-facing API boundary
+- React/Vite renders the interface
+- Python/FastAPI remains the internal ML engine sidecar for TADA inference
+
+The frontend no longer behaves like a generic localhost web client. Core app state, generation, clone uploads, export, setup actions, and progress updates are routed through Tauri commands.
 
 ## Project layout
 
@@ -21,6 +28,12 @@ Foundry Vox is a macOS desktop app for local text-to-speech generation with a Ta
 
 - macOS bundle: [`src-tauri/target/release/bundle/macos/Foundry Vox.app`](/Users/rob/Claude/vox/src-tauri/target/release/bundle/macos/Foundry%20Vox.app)
 - Sidecar binary: [`src-tauri/binaries/foundry-vox-backend-aarch64-apple-darwin`](/Users/rob/Claude/vox/src-tauri/binaries/foundry-vox-backend-aarch64-apple-darwin)
+
+## Runtime notes
+
+- Foundry Vox now prefers local model assets before attempting remote Hugging Face access.
+- On macOS, the app stores its working data under `~/Library/Application Support/Foundry Vox`.
+- The model cache directory is `~/Library/Application Support/Foundry Vox/models` in dev, and the packaged app exposes the same models folder through the in-app setup card.
 
 ## Notes
 
