@@ -49,6 +49,16 @@ class TadaEngine:
             __import__("os").getenv("FOUNDRY_VOX_ENGINE_MODE") == "mock"
         )
 
+    def _load_pretrained_local_first(self, loader: Any, repo_id: str, **kwargs: Any) -> Any:
+        shared_kwargs = {
+            "cache_dir": str(self.models_dir),
+            **kwargs,
+        }
+        try:
+            return loader.from_pretrained(repo_id, local_files_only=True, **shared_kwargs)
+        except Exception:  # noqa: BLE001
+            return loader.from_pretrained(repo_id, **shared_kwargs)
+
     async def check_auth(self) -> None:
         if self._is_mock_mode():
             self.mode = "mock"
@@ -64,10 +74,18 @@ class TadaEngine:
             ) from exc
 
         def _load() -> None:
-            AutoTokenizer.from_pretrained(
-                "meta-llama/Llama-3.2-1B",
-                cache_dir=str(self.models_dir),
-            )
+            try:
+                AutoTokenizer.from_pretrained(
+                    "meta-llama/Llama-3.2-1B",
+                    cache_dir=str(self.models_dir),
+                    local_files_only=True,
+                )
+                return
+            except Exception:  # noqa: BLE001
+                AutoTokenizer.from_pretrained(
+                    "meta-llama/Llama-3.2-1B",
+                    cache_dir=str(self.models_dir),
+                )
 
         try:
             await asyncio.to_thread(_load)
@@ -157,11 +175,13 @@ class TadaEngine:
 
         self._patch_generate(TadaForCausalLM, torch)
 
-        self.encoder = Encoder.from_pretrained("HumeAI/tada-codec", subfolder="encoder").to(
-            self.device
-        )
+        self.encoder = self._load_pretrained_local_first(
+            Encoder, "HumeAI/tada-codec", subfolder="encoder"
+        ).to(self.device)
         self.encoder.eval()
-        self.model = TadaForCausalLM.from_pretrained(f"HumeAI/{self.model_name}").to(self.device)
+        self.model = self._load_pretrained_local_first(
+            TadaForCausalLM, f"HumeAI/{self.model_name}"
+        ).to(self.device)
         self.model.eval()
 
     def _encode_reference_sync(self, audio_path: Path, transcript: str | None) -> Any:

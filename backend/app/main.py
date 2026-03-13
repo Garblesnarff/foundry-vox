@@ -83,12 +83,13 @@ async def _bootstrap_model(app: FastAPI) -> None:
         if exc.error == "huggingface_auth_required":
             services.health.setup_title = "Model access needs approval"
             services.health.setup_detail = (
-                "This app still depends on Hugging Face access to Meta's Llama tokenizer. "
-                "That is not yet a finished App Store flow."
+                "Foundry Vox could not find the required local tokenizer assets, and remote access to "
+                "Meta's Llama tokenizer is still gated."
             )
             services.health.setup_actions = [
-                "Sign in to Hugging Face on this Mac",
-                "Accept the Meta Llama 3.2 license",
+                "If you already have the model files on this Mac, place them in the app's models directory",
+                "Otherwise sign in to Hugging Face on this Mac",
+                "Accept the Meta Llama 3.2 license if remote download is needed",
                 "Restart Foundry Vox after access is confirmed",
             ]
         elif exc.error == "model_error":
