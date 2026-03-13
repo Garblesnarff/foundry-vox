@@ -6,9 +6,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::net::TcpListener;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
+use tokio::time::sleep;
 use uuid::Uuid;
 
 struct RuntimeState {
@@ -25,7 +27,10 @@ struct ProgressBridgeState {
     task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
-#[derive(Deserialize)]
+const STARTUP_RETRY_ATTEMPTS: usize = 20;
+const STARTUP_RETRY_DELAY: Duration = Duration::from_millis(300);
+
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CloneUploadPayload {
     name: String,
@@ -59,6 +64,39 @@ struct ProgressBridgeEvent {
     payload: Value,
 }
 
+async fn send_with_retry(
+    client: &reqwest::Client,
+    method: Method,
+    url: &str,
+    token: Option<&str>,
+    body: Option<Value>,
+) -> Result<reqwest::Response, String> {
+    let mut last_error: Option<String> = None;
+
+    for attempt in 0..STARTUP_RETRY_ATTEMPTS {
+        let mut request = client.request(method.clone(), url);
+        if let Some(token_value) = token {
+            request = request.header("x-foundry-vox-token", token_value);
+        }
+        if let Some(payload) = body.clone() {
+            request = request.json(&payload);
+        }
+
+        match request.send().await {
+            Ok(response) => return Ok(response),
+            Err(error) if error.is_connect() || error.is_timeout() => {
+                last_error = Some(error.to_string());
+                if attempt + 1 < STARTUP_RETRY_ATTEMPTS {
+                    sleep(STARTUP_RETRY_DELAY).await;
+                }
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| "The Foundry Vox backend did not become ready in time.".to_string()))
+}
+
 async fn backend_request<T: DeserializeOwned>(
     runtime: &RuntimeState,
     client: &BackendClient,
@@ -67,17 +105,7 @@ async fn backend_request<T: DeserializeOwned>(
     body: Option<Value>,
 ) -> Result<T, String> {
     let url = format!("{}{}", runtime.api_base, path);
-    let mut request = client.client.request(method, &url);
-
-    if let Some(token) = &runtime.api_token {
-        request = request.header("x-foundry-vox-token", token);
-    }
-
-    if let Some(payload) = body {
-        request = request.json(&payload);
-    }
-
-    let response = request.send().await.map_err(|error| error.to_string())?;
+    let response = send_with_retry(&client.client, method, &url, runtime.api_token.as_deref(), body).await?;
     if !response.status().is_success() {
         let fallback = format!("Backend request failed with {}", response.status());
         let error = response
@@ -100,17 +128,7 @@ async fn backend_request_bytes(
     body: Option<Value>,
 ) -> Result<BinaryResponse, String> {
     let url = format!("{}{}", runtime.api_base, path);
-    let mut request = client.client.request(method, &url);
-
-    if let Some(token) = &runtime.api_token {
-        request = request.header("x-foundry-vox-token", token);
-    }
-
-    if let Some(payload) = body {
-        request = request.json(&payload);
-    }
-
-    let response = request.send().await.map_err(|error| error.to_string())?;
+    let response = send_with_retry(&client.client, method, &url, runtime.api_token.as_deref(), body).await?;
     if !response.status().is_success() {
         let fallback = format!("Backend request failed with {}", response.status());
         let error = response
@@ -277,20 +295,54 @@ async fn backend_create_clone(
     client: State<'_, BackendClient>,
 ) -> Result<Value, String> {
     let url = format!("{}/voices/clone", runtime.api_base);
-    let audio_part = multipart::Part::bytes(payload.audio_bytes).file_name(payload.filename);
-    let form = multipart::Form::new()
-        .text("name", payload.name)
-        .text("gender", payload.gender)
-        .text("transcript", payload.transcript)
-        .text("tags", payload.tags)
-        .part("audio", audio_part);
+    let mut last_error: Option<String> = None;
+    let response = loop {
+        let audio_part =
+            multipart::Part::bytes(payload.audio_bytes.clone()).file_name(payload.filename.clone());
+        let form = multipart::Form::new()
+            .text("name", payload.name.clone())
+            .text("gender", payload.gender.clone())
+            .text("transcript", payload.transcript.clone())
+            .text("tags", payload.tags.clone())
+            .part("audio", audio_part);
 
-    let mut request = client.client.post(url).multipart(form);
-    if let Some(token) = &runtime.api_token {
-        request = request.header("x-foundry-vox-token", token);
-    }
+        let mut request = client.client.post(&url).multipart(form);
+        if let Some(token) = &runtime.api_token {
+            request = request.header("x-foundry-vox-token", token);
+        }
 
-    let response = request.send().await.map_err(|error| error.to_string())?;
+        let mut maybe_response = None;
+        for attempt in 0..STARTUP_RETRY_ATTEMPTS {
+            match request
+                .try_clone()
+                .ok_or_else(|| "Failed to clone the voice upload request.".to_string())?
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    maybe_response = Some(response);
+                    break;
+                }
+                Err(error) if error.is_connect() || error.is_timeout() => {
+                    last_error = Some(error.to_string());
+                    if attempt + 1 < STARTUP_RETRY_ATTEMPTS {
+                        sleep(STARTUP_RETRY_DELAY).await;
+                    }
+                }
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+
+        if let Some(response) = maybe_response {
+            break response;
+        }
+
+        return Err(
+            last_error
+                .clone()
+                .unwrap_or_else(|| "The Foundry Vox backend did not become ready in time.".to_string()),
+        );
+    };
     if !response.status().is_success() {
         let fallback = format!("Backend request failed with {}", response.status());
         let error = response
@@ -358,12 +410,14 @@ async fn run_progress_bridge(
     api_base: String,
     api_token: Option<String>,
 ) -> Result<(), String> {
-    let mut request = client.get(format!("{api_base}/generate/progress"));
-    if let Some(token) = api_token {
-        request = request.header("x-foundry-vox-token", token);
-    }
-
-    let response = request.send().await.map_err(|error| error.to_string())?;
+    let response = send_with_retry(
+        &client,
+        Method::GET,
+        &format!("{api_base}/generate/progress"),
+        api_token.as_deref(),
+        None,
+    )
+    .await?;
     if !response.status().is_success() {
         return Err(format!("Progress stream failed with {}", response.status()));
     }
