@@ -87,7 +87,8 @@ async def _bootstrap_model(app: FastAPI) -> None:
                 "Meta's Llama tokenizer is still gated."
             )
             services.health.setup_actions = [
-                "If you already have the model files on this Mac, place them in the app's models directory",
+                f"App models directory: {services.paths.models_dir}",
+                "If you already have the model files on this Mac, place them in that models directory",
                 "Otherwise sign in to Hugging Face on this Mac",
                 "Accept the Meta Llama 3.2 license if remote download is needed",
                 "Restart Foundry Vox after access is confirmed",
@@ -98,6 +99,7 @@ async def _bootstrap_model(app: FastAPI) -> None:
                 "Foundry Vox could not finish loading its on-device model stack."
             )
             services.health.setup_actions = [
+                f"App models directory: {services.paths.models_dir}",
                 "Verify the packaged model/runtime files are present",
                 "Restart the app and wait for the engine to finish loading",
             ]
