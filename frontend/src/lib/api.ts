@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   Generation,
   HealthResponse,
@@ -27,6 +28,15 @@ interface HistoryResponse {
 interface BinaryResponse {
   fileName: string;
   bytes: number[];
+}
+
+interface ProgressBridgeEvent {
+  eventType: string;
+  payload: ProgressEvent | string;
+}
+
+interface ProgressSubscription {
+  close: () => Promise<void>;
 }
 
 const DEFAULT_API_BASE = "http://127.0.0.1:3456/api/v1";
@@ -108,6 +118,7 @@ export const api = {
   getVoices: (type?: "preset" | "clone") =>
     invokeBackend<{ voices: Voice[] }>("backend_get_voices", { voiceType: type ?? null }),
   getVoice: (voiceId: string) => invokeBackend<{ voice: Voice }>("backend_get_voice", { voiceId }),
+  getVoicePreview: (voiceId: string) => invokeBackend<BinaryResponse>("backend_get_voice_preview", { voiceId }),
   createClone: async (formData: FormData) => {
     const audio = formData.get("audio");
     if (!(audio instanceof File)) {
@@ -166,19 +177,23 @@ export const api = {
     pause_seconds?: number;
   }) => invokeBackend<BinaryResponse>("backend_export_batch", { payload }),
   progressStream: async (onEvent: (event: ProgressEvent, type: string) => void) => {
-    await initRuntimeConfig();
-    const source = new EventSource(withToken("/generate/progress"));
-    source.addEventListener("progress", (event) => {
-      onEvent(JSON.parse((event as MessageEvent).data), "progress");
-    });
-    source.addEventListener("complete", (event) => {
-      onEvent(JSON.parse((event as MessageEvent).data), "complete");
-    });
-    source.addEventListener("error", (event) => {
-      if (event instanceof MessageEvent) {
-        onEvent(JSON.parse(event.data), "error");
+    const unlistenProgress = await listen<ProgressBridgeEvent>("backend://progress", (event) => {
+      if (typeof event.payload.payload === "string") {
+        onEvent({ status: "progress", percent: 0, message: event.payload.payload }, event.payload.eventType);
+        return;
       }
+      onEvent(event.payload.payload, event.payload.eventType);
     });
-    return source;
+    const unlistenError = await listen<string>("backend://progress-error", (event) => {
+      onEvent({ status: "error", percent: 0, message: event.payload }, "error");
+    });
+    await invokeBackend("start_progress_bridge");
+    return {
+      close: async () => {
+        await invokeBackend("stop_progress_bridge").catch(() => undefined);
+        const cleanup: UnlistenFn[] = [unlistenProgress, unlistenError];
+        cleanup.forEach((unlisten) => unlisten());
+      },
+    } satisfies ProgressSubscription;
   },
 };

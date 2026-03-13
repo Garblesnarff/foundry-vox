@@ -136,7 +136,8 @@ export default function App() {
   const [previewVoiceId, setPreviewVoiceId] = useState<string | null>(null);
   const [historyVoiceFilter, setHistoryVoiceFilter] = useState("all");
   const [historySort, setHistorySort] = useState<HistorySort>("newest");
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const eventSourceRef = useRef<{ close: () => Promise<void> } | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const scriptImportRef = useRef<HTMLInputElement | null>(null);
 
   const selectedVoice = useMemo(
@@ -225,7 +226,11 @@ export default function App() {
     }, 3000);
     return () => {
       window.clearInterval(interval);
-      eventSourceRef.current?.close();
+      void eventSourceRef.current?.close();
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
     };
   }, []);
 
@@ -244,7 +249,7 @@ export default function App() {
     setProgress({ status: "connecting", percent: 1 });
 
     try {
-      eventSourceRef.current?.close();
+      await eventSourceRef.current?.close();
       eventSourceRef.current = await api.progressStream((event, type) => {
         if (type === "complete") {
           setProgress({ status: "complete", percent: 100, generation_id: event.generation_id });
@@ -272,7 +277,7 @@ export default function App() {
       });
       setView("forge");
       setProgress({ status: "complete", percent: 100, generation_id: response.generation.id });
-      eventSourceRef.current?.close();
+      await eventSourceRef.current?.close();
       void refreshHistory()
         .catch(() => {
           // Keep the optimistic state if the background refresh fails.
@@ -367,10 +372,27 @@ export default function App() {
   async function handleVoicePreview(voiceId: string) {
     setPreviewVoiceId(voiceId);
     try {
-      const preview = new Audio(api.mediaUrl(`/voices/${voiceId}/preview`));
-      preview.addEventListener("ended", () => setPreviewVoiceId((current) => (current === voiceId ? null : current)), {
-        once: true,
-      });
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+
+      const file = await api.getVoicePreview(voiceId);
+      const audioUrl = URL.createObjectURL(new Blob([new Uint8Array(file.bytes)], { type: "audio/wav" }));
+      previewUrlRef.current = audioUrl;
+
+      const preview = new Audio(audioUrl);
+      preview.addEventListener(
+        "ended",
+        () => {
+          setPreviewVoiceId((current) => (current === voiceId ? null : current));
+          if (previewUrlRef.current) {
+            URL.revokeObjectURL(previewUrlRef.current);
+            previewUrlRef.current = null;
+          }
+        },
+        { once: true },
+      );
       await preview.play();
     } catch {
       setPreviewVoiceId(null);

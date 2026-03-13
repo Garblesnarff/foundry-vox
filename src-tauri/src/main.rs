@@ -5,6 +5,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::net::TcpListener;
+use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
@@ -18,6 +19,10 @@ struct RuntimeState {
 #[derive(Clone)]
 struct BackendClient {
     client: reqwest::Client,
+}
+
+struct ProgressBridgeState {
+    task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
 #[derive(Deserialize)]
@@ -45,6 +50,13 @@ struct ExportBatchPayload {
 struct BinaryResponse {
     file_name: String,
     bytes: Vec<u8>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProgressBridgeEvent {
+    event_type: String,
+    payload: Value,
 }
 
 #[derive(Serialize)]
@@ -339,6 +351,120 @@ async fn backend_export_batch(
     backend_request_bytes(&runtime, &client, Method::POST, "/export/batch", Some(body)).await
 }
 
+#[tauri::command]
+async fn backend_get_voice_preview(
+    voice_id: String,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<BinaryResponse, String> {
+    backend_request_bytes(
+        &runtime,
+        &client,
+        Method::GET,
+        &format!("/voices/{voice_id}/preview"),
+        None,
+    )
+    .await
+}
+
+async fn run_progress_bridge(
+    app: tauri::AppHandle,
+    client: reqwest::Client,
+    api_base: String,
+    api_token: Option<String>,
+) -> Result<(), String> {
+    let mut request = client.get(format!("{api_base}/generate/progress"));
+    if let Some(token) = api_token {
+        request = request.header("x-foundry-vox-token", token);
+    }
+
+    let response = request.send().await.map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("Progress stream failed with {}", response.status()));
+    }
+
+    let mut response = response;
+    let mut buffer = String::new();
+    let mut current_event = String::from("message");
+    let mut data_lines: Vec<String> = Vec::new();
+
+    while let Some(chunk) = response.chunk().await.map_err(|error| error.to_string())? {
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+        while let Some(newline_index) = buffer.find('\n') {
+            let line = buffer[..newline_index].trim_end_matches('\r').to_string();
+            buffer.drain(..=newline_index);
+
+            if line.is_empty() {
+                if !data_lines.is_empty() {
+                    let payload = serde_json::from_str::<Value>(&data_lines.join("\n"))
+                        .unwrap_or_else(|_| Value::String(data_lines.join("\n")));
+                    let _ = app.emit(
+                        "backend://progress",
+                        ProgressBridgeEvent {
+                            event_type: current_event.clone(),
+                            payload,
+                        },
+                    );
+                }
+                current_event = String::from("message");
+                data_lines.clear();
+                continue;
+            }
+
+            if let Some(event_type) = line.strip_prefix("event:") {
+                current_event = event_type.trim().to_string();
+                continue;
+            }
+
+            if let Some(data) = line.strip_prefix("data:") {
+                data_lines.push(data.trim().to_string());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_progress_bridge(
+    app: tauri::AppHandle,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+    bridge: State<'_, ProgressBridgeState>,
+) -> Result<(), String> {
+    {
+        let mut task = bridge.task.lock().map_err(|_| "Failed to lock progress bridge.".to_string())?;
+        if let Some(existing) = task.take() {
+            existing.abort();
+        }
+    }
+
+    let app_handle = app.clone();
+    let api_base = runtime.api_base.clone();
+    let api_token = runtime.api_token.clone();
+    let http = client.client.clone();
+
+    let handle = tauri::async_runtime::spawn(async move {
+        if let Err(error) = run_progress_bridge(app_handle.clone(), http, api_base, api_token).await {
+            let _ = app_handle.emit("backend://progress-error", error);
+        }
+    });
+
+    let mut task = bridge.task.lock().map_err(|_| "Failed to lock progress bridge.".to_string())?;
+    *task = Some(handle);
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_progress_bridge(bridge: State<'_, ProgressBridgeState>) -> Result<(), String> {
+    let mut task = bridge.task.lock().map_err(|_| "Failed to lock progress bridge.".to_string())?;
+    if let Some(existing) = task.take() {
+        existing.abort();
+    }
+    Ok(())
+}
+
 fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
@@ -409,6 +535,9 @@ fn main() {
             app.manage(BackendClient {
                 client: reqwest::Client::new(),
             });
+            app.manage(ProgressBridgeState {
+                task: Mutex::new(None),
+            });
 
             if !cfg!(debug_assertions) {
                 spawn_backend(app, api_port, api_token.as_deref())?;
@@ -435,7 +564,10 @@ fn main() {
             backend_generate,
             backend_create_clone,
             backend_download_generation_audio,
-            backend_export_batch
+            backend_export_batch,
+            backend_get_voice_preview,
+            start_progress_bridge,
+            stop_progress_bridge
         ])
         .run(tauri::generate_context!())
         .expect("error while running Foundry Vox");
