@@ -9,7 +9,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from .audio import generate_placeholder_wav
@@ -149,28 +148,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 API_TOKEN = os.getenv("FOUNDRY_VOX_API_TOKEN")
 app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
-cors_kwargs = {
-    "allow_methods": ["*"],
-    "allow_headers": ["*"],
-}
-
-if API_TOKEN:
-    cors_kwargs["allow_origins"] = [
-        "http://tauri.localhost",
-        "tauri://localhost",
-    ]
-else:
-    cors_kwargs["allow_origins"] = [
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://tauri.localhost",
-        "tauri://localhost",
-    ]
-    cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
-
-app.add_middleware(CORSMiddleware, **cors_kwargs)
-
-
 @app.middleware("http")
 async def require_runtime_token(request: Request, call_next: object) -> Response:
     if not API_TOKEN:
@@ -180,8 +157,7 @@ async def require_runtime_token(request: Request, call_next: object) -> Response
         return await call_next(request)
 
     header_token = request.headers.get("x-foundry-vox-token")
-    query_token = request.query_params.get("token")
-    if header_token == API_TOKEN or query_token == API_TOKEN:
+    if header_token == API_TOKEN:
         return await call_next(request)
 
     return JSONResponse(

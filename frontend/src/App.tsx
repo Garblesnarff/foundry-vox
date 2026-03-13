@@ -217,7 +217,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    void api.init().then(refreshAll);
+    void refreshAll();
     const interval = window.setInterval(() => {
       void api
         .getHealth()

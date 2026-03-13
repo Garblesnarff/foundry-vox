@@ -9,17 +9,6 @@ import type {
   Voice,
 } from "../types";
 
-interface RuntimeConfig {
-  apiBase: string;
-  apiToken: string | null;
-}
-
-interface ApiErrorShape {
-  error: string;
-  message: string;
-  details?: Record<string, unknown>;
-}
-
 interface HistoryResponse {
   generations: Generation[];
   total: number;
@@ -39,56 +28,6 @@ interface ProgressSubscription {
   close: () => Promise<void>;
 }
 
-const DEFAULT_API_BASE = "http://127.0.0.1:3456/api/v1";
-
-let runtimeConfig: RuntimeConfig = {
-  apiBase: DEFAULT_API_BASE,
-  apiToken: null,
-};
-let runtimeConfigPromise: Promise<void> | null = null;
-
-async function initRuntimeConfig(): Promise<void> {
-  if (!runtimeConfigPromise) {
-    runtimeConfigPromise = (async () => {
-      try {
-        const config = await invoke<RuntimeConfig>("runtime_config");
-        runtimeConfig = {
-          apiBase: config.apiBase || DEFAULT_API_BASE,
-          apiToken: config.apiToken || null,
-        };
-      } catch {
-        runtimeConfig = {
-          apiBase: DEFAULT_API_BASE,
-          apiToken: null,
-        };
-      }
-    })();
-  }
-  await runtimeConfigPromise;
-}
-
-function requestHeaders(init?: RequestInit): Headers {
-  const headers = new Headers(init?.headers ?? {});
-  if (runtimeConfig.apiToken) {
-    headers.set("x-foundry-vox-token", runtimeConfig.apiToken);
-  }
-  return headers;
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  await initRuntimeConfig();
-  const response = await fetch(`${runtimeConfig.apiBase}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers: requestHeaders(init),
-  });
-  if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
-    throw new Error(error?.message ?? `Request failed with ${response.status}`);
-  }
-  return response.json() as Promise<T>;
-}
-
 async function invokeBackend<T>(command: string, payload?: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(command, payload);
@@ -101,10 +40,7 @@ async function invokeBackend<T>(command: string, payload?: Record<string, unknow
 }
 
 export const api = {
-  init: initRuntimeConfig,
-  get baseUrl() {
-    return runtimeConfig.apiBase;
-  },
+  init: async () => undefined,
   getHealth: () => invokeBackend<HealthResponse>("backend_get_health"),
   getVoices: (type?: "preset" | "clone") =>
     invokeBackend<{ voices: Voice[] }>("backend_get_voices", { voiceType: type ?? null }),

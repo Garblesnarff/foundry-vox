@@ -59,21 +59,6 @@ struct ProgressBridgeEvent {
     payload: Value,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RuntimeConfig {
-    api_base: String,
-    api_token: Option<String>,
-}
-
-#[tauri::command]
-fn runtime_config(state: State<'_, RuntimeState>) -> RuntimeConfig {
-    RuntimeConfig {
-        api_base: state.api_base.clone(),
-        api_token: state.api_token.clone(),
-    }
-}
-
 async fn backend_request<T: DeserializeOwned>(
     runtime: &RuntimeState,
     client: &BackendClient,
@@ -549,7 +534,6 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            runtime_config,
             backend_get_health,
             backend_get_settings,
             backend_patch_settings,
