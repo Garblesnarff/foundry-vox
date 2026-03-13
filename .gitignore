@@ -15,5 +15,7 @@ backend/.mypy_cache/
 backend/.ruff_cache/
 Documents/
 *.pyc
+*.tsbuildinfo
 __pycache__/
-
+frontend/vite.config.js
+frontend/vite.config.d.ts
