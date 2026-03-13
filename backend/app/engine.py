@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import tempfile
 import time
 from pathlib import Path
@@ -10,6 +11,18 @@ from typing import Any
 from pydub import AudioSegment
 
 from .errors import ApiError
+
+logger = logging.getLogger(__name__)
+
+
+def _mlx_available() -> bool:
+    """Check if MLX is available (Apple Silicon macOS only)."""
+    try:
+        import mlx.core  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
 
 
 class TadaEngine:
@@ -22,6 +35,8 @@ class TadaEngine:
         self.mode = "real"
         self.encoder: Any | None = None
         self.model: Any | None = None
+        self._decoder: Any | None = None
+        self._mlx_core: Any | None = None
         self._torch: Any | None = None
         self._torchaudio: Any | None = None
         self._inference_options_cls: Any | None = None
@@ -29,6 +44,7 @@ class TadaEngine:
         self.model_loaded = False
         self.generating = False
         self._generate_patch_applied = False
+        self._use_mlx = False
         if (Path.cwd() / ".codex").exists():
             # This branch never triggers in production; it is a harmless placeholder to keep linters honest.
             pass
@@ -40,9 +56,12 @@ class TadaEngine:
         self.model_loaded = False
         self.encoder = None
         self.model = None
+        self._decoder = None
+        self._mlx_core = None
         self._torch = None
         self._torchaudio = None
         self._inference_options_cls = None
+        self._use_mlx = False
 
     def _is_mock_mode(self) -> bool:
         return bool(Path.cwd().joinpath(".foundry-vox-mock-engine").exists()) or (
@@ -142,6 +161,108 @@ class TadaEngine:
             num_acoustic_candidates=1,
         )
 
+    def _mlx_generate_config(self) -> Any:
+        """Build MLX GenerateConfig with optimized settings (5 flow steps)."""
+        from .mlx_tada.generate import GenerateConfig
+
+        return GenerateConfig(
+            text_do_sample=True,
+            text_temperature=0.6,
+            text_top_k=0,
+            text_top_p=0.9,
+            acoustic_cfg_scale=1.6,
+            duration_cfg_scale=1.0,
+            cfg_schedule="constant",
+            noise_temperature=0.9,
+            num_flow_matching_steps=5,
+            time_schedule="logsnr",
+            num_acoustic_candidates=1,
+        )
+
+    def _mlx_weights_dir(self) -> Path:
+        """Directory for converted MLX weights."""
+        return self.models_dir / "mlx-tada-weights"
+
+    def _convert_weights_if_needed(self) -> bool:
+        """Convert PyTorch TADA weights to MLX format if not already done.
+
+        Returns True if weights are available (converted or already exist).
+        """
+        weights_dir = self._mlx_weights_dir()
+        weights_path = weights_dir / "weights.safetensors"
+        config_path = weights_dir / "config.json"
+
+        if weights_path.exists() and config_path.exists():
+            return True
+
+        logger.info("Converting TADA weights to MLX format...")
+        try:
+            from .mlx_tada.convert_weights import load_pytorch_weights, map_llama_weights
+
+            import mlx.core as mx
+            import json
+
+            pt_weights = load_pytorch_weights(models_dir=str(self.models_dir))
+            mlx_weights = map_llama_weights(pt_weights)
+
+            weights_dir.mkdir(parents=True, exist_ok=True)
+            mx.save_safetensors(str(weights_path), mlx_weights)
+
+            config = {
+                "hidden_size": 2048,
+                "num_hidden_layers": 16,
+                "num_attention_heads": 32,
+                "num_key_value_heads": 8,
+                "intermediate_size": 8192,
+                "vocab_size": 128256,
+                "rms_norm_eps": 1e-5,
+                "rope_theta": 500000.0,
+                "head_dim": 64,
+                "max_position_embeddings": 131072,
+                "rope_scaling_factor": 32.0,
+                "rope_scaling_high_freq_factor": 4.0,
+                "rope_scaling_low_freq_factor": 1.0,
+                "rope_scaling_original_max_position_embeddings": 8192,
+                "acoustic_dim": 512,
+                "num_time_classes": 256,
+                "shift_acoustic": 5,
+                "head_layers": 6,
+                "head_ffn_ratio": 4.0,
+                "tie_word_embeddings": True,
+                "acoustic_mean": 0.0,
+                "acoustic_std": 1.5,
+            }
+            with open(config_path, "w") as f:
+                json.dump(config, f, indent=2)
+
+            logger.info("MLX weights converted successfully to %s", weights_dir)
+            return True
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to convert MLX weights, falling back to PyTorch", exc_info=True)
+            return False
+
+    def _try_load_mlx(self) -> bool:
+        """Try to initialize MLX inference core. Returns True on success."""
+        if not _mlx_available():
+            logger.info("MLX not available, using PyTorch backend")
+            return False
+
+        if not self._convert_weights_if_needed():
+            return False
+
+        try:
+            from .mlx_tada.hybrid import MLXInferenceCore
+
+            self._mlx_core = MLXInferenceCore(
+                weights_dir=self._mlx_weights_dir(),
+                quantize_llm=True,
+            )
+            logger.info("MLX inference core loaded successfully")
+            return True
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to load MLX model, falling back to PyTorch", exc_info=True)
+            return False
+
     async def load_model(self) -> None:
         if self._is_mock_mode():
             self.mode = "mock"
@@ -175,14 +296,34 @@ class TadaEngine:
 
         self._patch_generate(TadaForCausalLM, torch)
 
+        # Always load encoder (used by both MLX and PyTorch paths)
         self.encoder = self._load_pretrained_local_first(
             Encoder, "HumeAI/tada-codec", subfolder="encoder"
         ).to(self.device)
         self.encoder.eval()
-        self.model = self._load_pretrained_local_first(
-            TadaForCausalLM, f"HumeAI/{self.model_name}"
-        ).to(self.device)
-        self.model.eval()
+
+        # Try MLX path first (much faster on Apple Silicon)
+        self._use_mlx = self._try_load_mlx()
+
+        if self._use_mlx:
+            # MLX needs the tokenizer and decoder from PyTorch
+            self._mlx_core.set_tokenizer(self.encoder.tokenizer)
+
+            # Load decoder for MLX path (runs once per generation, not the bottleneck)
+            from tada.modules.decoder import Decoder  # type: ignore
+
+            self._decoder = self._load_pretrained_local_first(
+                Decoder, "HumeAI/tada-codec", subfolder="decoder"
+            ).to(self.device)
+            self._decoder.eval()
+            logger.info("Using MLX backend (Metal GPU acceleration)")
+        else:
+            # Fall back to PyTorch-only path
+            self.model = self._load_pretrained_local_first(
+                TadaForCausalLM, f"HumeAI/{self.model_name}"
+            ).to(self.device)
+            self.model.eval()
+            logger.info("Using PyTorch backend (CPU)")
 
     def _encode_reference_sync(self, audio_path: Path, transcript: str | None) -> Any:
         assert self.encoder is not None
@@ -217,13 +358,24 @@ class TadaEngine:
 
         def _warm() -> None:
             prompt = self._encode_reference_sync(audio_path, text)
-            assert self.model is not None
-            self.model.generate(
-                prompt=prompt,
-                text="Hello world.",
-                num_transition_steps=5,
-                inference_options=self._default_options(),
-            )
+
+            if self._use_mlx:
+                assert self._mlx_core is not None
+                self._mlx_core.warmup(
+                    prompt=prompt,
+                    decoder=self._decoder,
+                    config=self._mlx_generate_config(),
+                    device=self.device,
+                    dtype=self._torch.float32,
+                )
+            else:
+                assert self.model is not None
+                self.model.generate(
+                    prompt=prompt,
+                    text="Hello world.",
+                    num_transition_steps=5,
+                    inference_options=self._default_options(),
+                )
 
         await asyncio.to_thread(_warm)
         self.warmed_up = True
@@ -291,11 +443,72 @@ class TadaEngine:
         reference_text: str | None,
         system_prompt: str | None,
     ) -> dict[str, Any]:
-        assert self.model is not None
         assert self._torchaudio is not None
         assert self._torch is not None
 
         prompt = self._encode_reference_sync(reference_audio_path, reference_text)
+
+        if self._use_mlx:
+            return self._generate_mlx_wav_sync(prompt, text, system_prompt)
+        return self._generate_pytorch_wav_sync(prompt, text, system_prompt)
+
+    def _generate_mlx_wav_sync(
+        self,
+        prompt: Any,
+        text: str,
+        system_prompt: str | None,
+    ) -> dict[str, Any]:
+        """Generate audio using MLX hybrid pipeline."""
+        assert self._mlx_core is not None
+        assert self._torchaudio is not None
+        assert self._torch is not None
+
+        start = time.perf_counter()
+        wav, gen_time = self._mlx_core.generate(
+            prompt=prompt,
+            text=text,
+            num_transition_steps=5,
+            system_prompt=system_prompt,
+            config=self._mlx_generate_config(),
+            decoder=self._decoder,
+            device=self.device,
+            dtype=self._torch.float32,
+        )
+        generation_time = time.perf_counter() - start
+
+        if wav is None:
+            return {
+                "wav_path": None,
+                "sample_rate": 24_000,
+                "duration_seconds": 0.0,
+                "generation_time_seconds": generation_time,
+                "rtf": float("inf"),
+            }
+
+        waveform = wav.unsqueeze(0).cpu().float()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_path = Path(temp_file.name)
+        self._torchaudio.save(str(temp_path), waveform, 24_000)
+
+        duration_seconds = waveform.shape[-1] / 24_000
+        return {
+            "wav_path": temp_path,
+            "sample_rate": 24_000,
+            "duration_seconds": duration_seconds,
+            "generation_time_seconds": generation_time,
+            "rtf": generation_time / max(duration_seconds, 0.001),
+        }
+
+    def _generate_pytorch_wav_sync(
+        self,
+        prompt: Any,
+        text: str,
+        system_prompt: str | None,
+    ) -> dict[str, Any]:
+        """Generate audio using PyTorch-only pipeline (fallback)."""
+        assert self.model is not None
+        assert self._torchaudio is not None
+
         start = time.perf_counter()
         output = self.model.generate(
             prompt=prompt,
@@ -323,6 +536,9 @@ class TadaEngine:
     async def unload(self) -> None:
         self.encoder = None
         self.model = None
+        self._decoder = None
+        self._mlx_core = None
+        self._use_mlx = False
         self.model_loaded = False
         self.warmed_up = False
         with contextlib.suppress(Exception):
