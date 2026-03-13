@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "foundry-vox-backend"
+version = "0.1.0"
+description = "FastAPI sidecar backend for Foundry Vox."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "aiofiles>=24.1.0",
+  "aiosqlite>=0.20.0",
+  "fastapi>=0.115.0",
+  "pydantic>=2.10.0",
+  "pydub>=0.25.1",
+  "python-multipart>=0.0.9",
+  "uvicorn[standard]>=0.32.0"
+]
+
+[project.optional-dependencies]
+ml = [
+  "descript-audio-codec",
+  "hume-tada",
+  "torch>=2.2.0",
+  "torchaudio>=2.2.0",
+  "transformers>=4.57.1,<5"
+]
+build = [
+  "pyinstaller>=6.11.0"
+]
+dev = [
+  "httpx>=0.28.0",
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.25.0",
+  "ruff>=0.9.0"
+]
+
+[project.scripts]
+foundry-vox-backend = "app.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 200
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008"]

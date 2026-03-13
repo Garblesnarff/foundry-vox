@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Foundry Vox",
+  "version": "0.1.0",
+  "identifier": "com.foundry.vox",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build:web",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Foundry Vox",
+        "width": 1520,
+        "height": 980,
+        "minWidth": 1180,
+        "minHeight": 780,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "Productivity",
+    "shortDescription": "Offline Apple Silicon voice generation studio.",
+    "longDescription": "Foundry Vox is a local macOS text-to-speech studio that runs voice cloning and speech generation on-device with bundled desktop infrastructure.",
+    "externalBin": ["binaries/foundry-vox-backend"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/256x256.png",
+      "icons/512x512.png",
+      "icons/1024x1024.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
+  }
+}

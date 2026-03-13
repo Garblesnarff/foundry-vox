@@ -1,0 +1,22 @@
+{
+  "name": "foundry-vox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:web": "npm --prefix frontend run dev -- --host 127.0.0.1 --port 1420",
+    "dev:backend": "uv run --project backend uvicorn app.main:app --host 127.0.0.1 --port 3456 --reload",
+    "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:backend\"",
+    "build:web": "npm --prefix frontend run build",
+    "build:sidecar": "sh ./scripts/build-sidecar.sh",
+    "lint:web": "npm --prefix frontend run lint",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run build:web && npm run build:sidecar && tauri build",
+    "tauri:build:appstore": "npm run build:web && npm run build:sidecar && tauri build --bundles app --config src-tauri/tauri.appstore.conf.json"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.7.1",
+    "concurrently": "^9.1.2"
+  }
+}
+

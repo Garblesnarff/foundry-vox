@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Warm Narrator",
+    "gender": "M",
+    "color": "#E8A849",
+    "description": "Rich, warm male baritone. Great for audiobooks and storytelling.",
+    "tags": ["narration", "audiobook", "warm"],
+    "reference_file": "warm-narrator.wav",
+    "reference_text": "The forge burns brightest at midnight. Every voice begins as raw metal, waiting for its final shape."
+  },
+  {
+    "name": "Bright Host",
+    "gender": "F",
+    "color": "#D4735E",
+    "description": "Energetic female voice with clear diction. Ideal for podcasts and explainers.",
+    "tags": ["podcast", "energetic", "clear"],
+    "reference_file": "bright-host.wav",
+    "reference_text": "Welcome back to Foundry Vox, where every line of copy leaves the desk sounding polished and alive."
+  },
+  {
+    "name": "Deep Anchor",
+    "gender": "M",
+    "color": "#7B8F6A",
+    "description": "Authoritative deep male voice. Perfect for documentaries and trailers.",
+    "tags": ["documentary", "deep", "authority"],
+    "reference_file": "deep-anchor.wav",
+    "reference_text": "When the storm rolled across the harbor, the old station answered with a voice carved from iron and distance."
+  },
+  {
+    "name": "Gentle Reader",
+    "gender": "F",
+    "color": "#9B8EC4",
+    "description": "Soft, calming female voice. Suited for meditation and children's content.",
+    "tags": ["calm", "soft", "children"],
+    "reference_file": "gentle-reader.wav",
+    "reference_text": "Take a slow breath and listen as the room grows quiet, the pages turning softly into evening."
+  },
+  {
+    "name": "Crisp Lecturer",
+    "gender": "M",
+    "color": "#6BA3B7",
+    "description": "Precise, measured delivery. Technical tutorials and presentations.",
+    "tags": ["technical", "precise", "tutorial"],
+    "reference_file": "crisp-lecturer.wav",
+    "reference_text": "First, verify your inputs. Then follow each step in order so the system behaves exactly as expected."
+  },
+  {
+    "name": "Velvet Evening",
+    "gender": "F",
+    "color": "#B07DA0",
+    "description": "Smooth, intimate tone with a slight rasp. Late-night radio feel.",
+    "tags": ["intimate", "smooth", "radio"],
+    "reference_file": "velvet-evening.wav",
+    "reference_text": "Midnight settles over the city, and every whispered story glows a little longer in the dark."
+  }
+]
