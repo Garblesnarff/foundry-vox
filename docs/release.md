@@ -16,6 +16,8 @@
 3. Ensure `src-tauri/entitlements.plist` matches your signing requirements
 4. Provide the correct Apple signing identity and provisioning profile in your local Xcode/Keychain setup
 5. Run `npm run tauri:build:appstore`
+6. Build the signed App Store installer package:
+   `APP_SIGN_IDENTITY="Apple Distribution: Your Name (TEAMID)" INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: Your Name (TEAMID)" ./scripts/package_appstore.sh`
 
 ## Runtime shape
 
