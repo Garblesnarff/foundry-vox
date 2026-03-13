@@ -115,6 +115,85 @@ async fn backend_get_history_stats(
     backend_request(&runtime, &client, Method::GET, "/history/stats", None).await
 }
 
+#[tauri::command]
+async fn backend_get_voices(
+    voice_type: Option<String>,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    let path = match voice_type {
+        Some(kind) if !kind.is_empty() => format!("/voices?type={kind}"),
+        _ => "/voices".to_string(),
+    };
+    backend_request(&runtime, &client, Method::GET, &path, None).await
+}
+
+#[tauri::command]
+async fn backend_get_voice(
+    voice_id: String,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(&runtime, &client, Method::GET, &format!("/voices/{voice_id}"), None).await
+}
+
+#[tauri::command]
+async fn backend_update_voice(
+    voice_id: String,
+    payload: Value,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(
+        &runtime,
+        &client,
+        Method::PUT,
+        &format!("/voices/{voice_id}"),
+        Some(payload),
+    )
+    .await
+}
+
+#[tauri::command]
+async fn backend_delete_voice(
+    voice_id: String,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(
+        &runtime,
+        &client,
+        Method::DELETE,
+        &format!("/voices/{voice_id}"),
+        None,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn backend_delete_history_item(
+    generation_id: String,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(
+        &runtime,
+        &client,
+        Method::DELETE,
+        &format!("/history/{generation_id}"),
+        None,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn backend_clear_history(
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(&runtime, &client, Method::DELETE, "/history", None).await
+}
+
 fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
@@ -201,7 +280,13 @@ fn main() {
             backend_get_settings,
             backend_patch_settings,
             backend_get_history,
-            backend_get_history_stats
+            backend_get_history_stats,
+            backend_get_voices,
+            backend_get_voice,
+            backend_update_voice,
+            backend_delete_voice,
+            backend_delete_history_item,
+            backend_clear_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running Foundry Vox");

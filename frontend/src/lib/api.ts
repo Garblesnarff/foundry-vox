@@ -115,8 +115,8 @@ export const api = {
   mediaUrl: (path: string) => withToken(path),
   getHealth: () => invokeBackend<HealthResponse>("backend_get_health"),
   getVoices: (type?: "preset" | "clone") =>
-    request<{ voices: Voice[] }>(type ? `/voices?type=${type}` : "/voices"),
-  getVoice: (voiceId: string) => request<{ voice: Voice }>(`/voices/${voiceId}`),
+    invokeBackend<{ voices: Voice[] }>("backend_get_voices", { voiceType: type ?? null }),
+  getVoice: (voiceId: string) => invokeBackend<{ voice: Voice }>("backend_get_voice", { voiceId }),
   createClone: async (formData: FormData) => {
     await initRuntimeConfig();
     const response = await fetch(`${runtimeConfig.apiBase}/voices/clone`, {
@@ -139,13 +139,8 @@ export const api = {
     }>;
   },
   updateVoice: (voiceId: string, payload: Record<string, unknown>) =>
-    request<{ voice: Voice }>(`/voices/${voiceId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
-  deleteVoice: (voiceId: string) =>
-    request<{ deleted: boolean }>(`/voices/${voiceId}`, { method: "DELETE" }),
+    invokeBackend<{ voice: Voice }>("backend_update_voice", { voiceId, payload }),
+  deleteVoice: (voiceId: string) => invokeBackend<{ deleted: boolean }>("backend_delete_voice", { voiceId }),
   generate: (payload: Record<string, unknown>) =>
     request<{ generation: Generation }>("/generate", {
       method: "POST",
@@ -156,8 +151,8 @@ export const api = {
     invokeBackend<HistoryResponse>("backend_get_history", { query: params.toString() }),
   getHistoryStats: () => invokeBackend<HistoryStats>("backend_get_history_stats"),
   deleteHistoryItem: (generationId: string) =>
-    request<{ deleted: boolean }>(`/history/${generationId}`, { method: "DELETE" }),
-  clearHistory: () => request<{ deleted: number }>("/history", { method: "DELETE" }),
+    invokeBackend<{ deleted: boolean }>("backend_delete_history_item", { generationId }),
+  clearHistory: () => invokeBackend<{ deleted: number }>("backend_clear_history"),
   getSettings: () => invokeBackend<Settings>("backend_get_settings"),
   patchSettings: (payload: Partial<Settings>) => invokeBackend<Settings>("backend_patch_settings", { payload }),
   downloadGenerationAudio: (generationId: string) => fetchBlob(`/generate/${generationId}/download`),
