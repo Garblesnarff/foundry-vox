@@ -1,4 +1,5 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
@@ -40,6 +41,10 @@ function relativeDate(iso: string) {
 
 function accentColor(voice: Voice | null | undefined) {
   return voice?.color ?? "#E8A849";
+}
+
+function localAudioSrc(path: string) {
+  return convertFileSrc(path);
 }
 
 function waveformHeight(index: number, max = 88) {
@@ -728,7 +733,7 @@ export default function App() {
                     <audio
                       className="audio-player"
                       controls
-                      src={api.mediaUrl(`/generate/${latestGeneration.id}/audio`)}
+                      src={localAudioSrc(latestGeneration.output_path)}
                     />
                     <div className="metrics-grid">
                       <div>
@@ -1040,7 +1045,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="history-actions">
-                      <audio controls src={api.mediaUrl(`/generate/${entry.id}/audio`)} />
+                      <audio controls src={localAudioSrc(entry.output_path)} />
                       <div className="button-row">
                         <button className="ghost-button compact" onClick={() => void handleSaveGeneration(entry)}>
                           Save

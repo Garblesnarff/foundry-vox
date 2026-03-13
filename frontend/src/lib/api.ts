@@ -67,14 +67,6 @@ async function initRuntimeConfig(): Promise<void> {
   await runtimeConfigPromise;
 }
 
-function withToken(path: string): string {
-  if (!runtimeConfig.apiToken) {
-    return `${runtimeConfig.apiBase}${path}`;
-  }
-  const separator = path.includes("?") ? "&" : "?";
-  return `${runtimeConfig.apiBase}${path}${separator}token=${encodeURIComponent(runtimeConfig.apiToken)}`;
-}
-
 function requestHeaders(init?: RequestInit): Headers {
   const headers = new Headers(init?.headers ?? {});
   if (runtimeConfig.apiToken) {
@@ -113,7 +105,6 @@ export const api = {
   get baseUrl() {
     return runtimeConfig.apiBase;
   },
-  mediaUrl: (path: string) => withToken(path),
   getHealth: () => invokeBackend<HealthResponse>("backend_get_health"),
   getVoices: (type?: "preset" | "clone") =>
     invokeBackend<{ voices: Voice[] }>("backend_get_voices", { voiceType: type ?? null }),
