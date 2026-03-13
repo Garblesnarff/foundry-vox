@@ -703,6 +703,13 @@ input::placeholder {
   resize: vertical;
 }
 
+.field-help {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
 .control-field-wide {
   grid-column: 1 / -1;
 }
@@ -849,7 +856,6 @@ input::placeholder {
 
 .library-page,
 .history-page,
-.settings-page,
 .about-page {
   display: flex;
   flex-direction: column;
@@ -1059,6 +1065,32 @@ input::placeholder {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.settings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-split strong {
+  font-size: 12px;
+  color: var(--gold);
+}
+
+.thread-slider {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
 .inline-path {
   width: 100%;
 }
@@ -1100,6 +1132,52 @@ input::placeholder {
 .modal-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 16px 0;
+}
+
+.side-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(7, 6, 5, 0.72);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.side-panel {
+  width: min(380px, 100%);
+  height: 100%;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(26, 24, 21, 0.98), rgba(20, 18, 15, 0.98)),
+    radial-gradient(circle at top right, rgba(232, 168, 73, 0.08), transparent 32%);
+  box-shadow: -22px 0 60px rgba(0, 0, 0, 0.34);
+}
+
+.side-panel .settings-grid {
+  grid-template-columns: 1fr;
+}
+
+.side-panel .toggle-group.full-width {
+  width: 100%;
+}
+
+.side-panel .toggle-group.full-width .toggle-button {
+  flex: 1;
+}
+
+.settings-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.about-panel .about-card {
+  box-shadow: none;
 }
 
 @keyframes pulse-bar {
@@ -1174,6 +1252,10 @@ input::placeholder {
 
   .history-actions {
     grid-column: 1 / -1;
+  }
+
+  .side-panel {
+    width: min(420px, 100%);
   }
 }
 

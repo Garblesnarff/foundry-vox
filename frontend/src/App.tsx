@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "./lib/api";
 import type { Generation, HealthResponse, ProgressEvent, Settings, Voice } from "./types";
 
-type View = "forge" | "library" | "history" | "settings" | "about";
+type View = "forge" | "library" | "history";
 type LibraryFilter = "all" | "preset" | "clone";
 type LibraryMode = "grid" | "list";
 type HistorySort = "newest" | "longest" | "shortest";
@@ -120,6 +120,8 @@ export default function App() {
   const [error, setError] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showAboutPanel, setShowAboutPanel] = useState(false);
   const [cloneName, setCloneName] = useState("");
   const [cloneTranscript, setCloneTranscript] = useState("");
   const [cloneGender, setCloneGender] = useState("O");
@@ -419,10 +421,22 @@ export default function App() {
             <span className={`engine-dot ${health?.status ?? "loading"}`} />
             <span>{health?.status === "ready" ? "Ready to forge" : health?.status ?? "loading"}</span>
           </div>
-          <button className={`icon-button ${view === "about" ? "active" : ""}`} onClick={() => setView("about")}>
+          <button
+            className={`icon-button ${showAboutPanel ? "active" : ""}`}
+            onClick={() => {
+              setShowAboutPanel((current) => !current);
+              setShowSettingsPanel(false);
+            }}
+          >
             About
           </button>
-          <button className={`icon-button ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")}>
+          <button
+            className={`icon-button ${showSettingsPanel ? "active" : ""}`}
+            onClick={() => {
+              setShowSettingsPanel((current) => !current);
+              setShowAboutPanel(false);
+            }}
+          >
             Settings
           </button>
         </div>
@@ -846,64 +860,6 @@ export default function App() {
               ) : null}
             </div>
 
-            {cloneOpen ? (
-              <form className="modal" onSubmit={(event) => void handleCloneSubmit(event)}>
-                <div className="modal-card">
-                  <div className="section-header">
-                    <div>
-                      <p className="eyebrow">Clone voice</p>
-                      <h2>Reference upload</h2>
-                    </div>
-                    <button type="button" className="icon-button" onClick={() => setCloneOpen(false)}>
-                      Close
-                    </button>
-                  </div>
-                  <div className="modal-grid">
-                    <label className="control-field">
-                      <span>Name</span>
-                      <input value={cloneName} onChange={(event) => setCloneName(event.target.value)} required />
-                    </label>
-                    <label className="control-field">
-                      <span>Gender</span>
-                      <select value={cloneGender} onChange={(event) => setCloneGender(event.target.value)}>
-                        <option value="F">Female</option>
-                        <option value="M">Male</option>
-                        <option value="O">Other</option>
-                      </select>
-                    </label>
-                    <label className="control-field control-field-wide">
-                      <span>Reference audio</span>
-                      <input
-                        type="file"
-                        accept=".wav,.mp3,.m4a,.aac"
-                        onChange={(event) => setCloneFile(event.target.files?.[0] ?? null)}
-                        required
-                      />
-                    </label>
-                    <label className="control-field control-field-wide">
-                      <span>Manual transcript</span>
-                      <textarea
-                        value={cloneTranscript}
-                        onChange={(event) => setCloneTranscript(event.target.value)}
-                        placeholder="Leave blank to let TADA transcribe the reference."
-                      />
-                    </label>
-                    <label className="control-field control-field-wide">
-                      <span>Tags</span>
-                      <input value={cloneTags} onChange={(event) => setCloneTags(event.target.value)} />
-                    </label>
-                  </div>
-                  <div className="button-row">
-                    <button className="primary-button" type="submit">
-                      Create clone
-                    </button>
-                    <button type="button" className="ghost-button" onClick={() => setCloneOpen(false)}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </form>
-            ) : null}
           </section>
         ) : null}
 
@@ -1026,27 +982,124 @@ export default function App() {
           </section>
         ) : null}
 
-        {view === "settings" ? (
-          <section className="settings-page">
-            <div className="section-title">
+      </main>
+
+      {cloneOpen ? (
+        <form className="modal" onSubmit={(event) => void handleCloneSubmit(event)}>
+          <div className="modal-card">
+            <div className="section-header">
+              <div>
+                <p className="eyebrow">Clone voice</p>
+                <h2>Reference upload</h2>
+              </div>
+              <button type="button" className="icon-button" onClick={() => setCloneOpen(false)}>
+                Close
+              </button>
+            </div>
+            <div className="modal-grid">
+              <label className="control-field">
+                <span>Name</span>
+                <input value={cloneName} onChange={(event) => setCloneName(event.target.value)} required />
+              </label>
+              <label className="control-field">
+                <span>Gender</span>
+                <select value={cloneGender} onChange={(event) => setCloneGender(event.target.value)}>
+                  <option value="F">Female</option>
+                  <option value="M">Male</option>
+                  <option value="O">Other</option>
+                </select>
+              </label>
+              <label className="control-field control-field-wide">
+                <span>Reference audio</span>
+                <input
+                  type="file"
+                  accept=".wav,.mp3,.m4a,.aac"
+                  onChange={(event) => setCloneFile(event.target.files?.[0] ?? null)}
+                  required
+                />
+                <p className="field-help">
+                  Provide clean speech audio and the exact transcript for what is spoken in that clip.
+                </p>
+              </label>
+              <label className="control-field control-field-wide">
+                <span>Transcript of the reference audio</span>
+                <textarea
+                  value={cloneTranscript}
+                  onChange={(event) => setCloneTranscript(event.target.value)}
+                  placeholder="Paste the exact words spoken in the uploaded audio."
+                  required
+                />
+                <p className="field-help">
+                  The transcript should closely match the uploaded audio. Auto-transcription is currently disabled.
+                </p>
+              </label>
+              <label className="control-field control-field-wide">
+                <span>Tags</span>
+                <input value={cloneTags} onChange={(event) => setCloneTags(event.target.value)} />
+              </label>
+            </div>
+            <div className="button-row">
+              <button className="primary-button" type="submit">
+                Create clone
+              </button>
+              <button type="button" className="ghost-button" onClick={() => setCloneOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : null}
+
+      {showSettingsPanel ? (
+        <div className="side-panel-overlay" onClick={() => setShowSettingsPanel(false)}>
+          <aside className="side-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="section-header">
               <div>
                 <p className="eyebrow">Settings</p>
-                <h2>Performance, output, storage</h2>
+                <h2>Forge configuration</h2>
               </div>
+              <button className="icon-button" onClick={() => setShowSettingsPanel(false)}>
+                Close
+              </button>
             </div>
 
-            <div className="settings-grid">
-              <label className="control-field">
-                <span>CPU threads</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={16}
-                  value={settings.cpu_threads}
-                  onChange={(event) => setSettings((current) => ({ ...current, cpu_threads: Number(event.target.value) }))}
-                  onBlur={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
-                />
-              </label>
+            <section className="settings-block">
+              <p className="eyebrow">Model</p>
+              <div className="toggle-group full-width">
+                {[
+                  { id: "tada-1b", label: "TADA 1B" },
+                  { id: "tada-3b", label: "TADA 3B" },
+                ].map((model) => (
+                  <button
+                    key={model.id}
+                    className={`toggle-button ${settings.model === model.id ? "active" : ""}`}
+                    onClick={() => void handleSaveSettings({ model: model.id as Settings["model"] })}
+                  >
+                    {model.label}
+                  </button>
+                ))}
+              </div>
+              <p className="muted">3B aims higher on quality but carries a much heavier local footprint.</p>
+            </section>
+
+            <section className="settings-block">
+              <div className="settings-split">
+                <span className="eyebrow">CPU threads</span>
+                <strong>{settings.cpu_threads}</strong>
+              </div>
+              <input
+                className="thread-slider"
+                type="range"
+                min={1}
+                max={16}
+                value={settings.cpu_threads}
+                onChange={(event) => setSettings((current) => ({ ...current, cpu_threads: Number(event.target.value) }))}
+                onMouseUp={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
+                onTouchEnd={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
+              />
+            </section>
+
+            <section className="settings-grid">
               <label className="control-field">
                 <span>Sample rate</span>
                 <select
@@ -1074,6 +1127,19 @@ export default function App() {
                 </select>
               </label>
               <label className="control-field">
+                <span>Output format</span>
+                <select
+                  value={settings.output_format}
+                  onChange={(event) => void handleSaveSettings({ output_format: event.target.value as Settings["output_format"] })}
+                >
+                  {["wav", "mp3", "aac"].map((format) => (
+                    <option key={format} value={format}>
+                      {format.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="control-field">
                 <span>Warmup on launch</span>
                 <select
                   value={String(settings.warmup_on_launch)}
@@ -1083,10 +1149,10 @@ export default function App() {
                   <option value="false">Disabled</option>
                 </select>
               </label>
-            </div>
+            </section>
 
-            <label className="control-field control-field-wide">
-              <span>Output directory</span>
+            <section className="settings-block">
+              <p className="eyebrow">Output directory</p>
               <div className="inline-path">
                 <input
                   value={settings.output_directory}
@@ -1097,12 +1163,30 @@ export default function App() {
                   Choose
                 </button>
               </div>
-            </label>
-          </section>
-        ) : null}
+            </section>
 
-        {view === "about" ? (
-          <section className="about-page">
+            <section className="settings-footer">
+              <div>
+                <strong>Foundry Vox</strong>
+                <p className="muted">Built with Llama and TADA, packaged for a local-first macOS workflow.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      ) : null}
+
+      {showAboutPanel ? (
+        <div className="side-panel-overlay" onClick={() => setShowAboutPanel(false)}>
+          <aside className="side-panel about-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="section-header">
+              <div>
+                <p className="eyebrow">About</p>
+                <h2>Release context</h2>
+              </div>
+              <button className="icon-button" onClick={() => setShowAboutPanel(false)}>
+                Close
+              </button>
+            </div>
             <article className="about-card">
               <p className="eyebrow">App shape</p>
               <h2>Built as an offline desktop forge</h2>
@@ -1112,17 +1196,17 @@ export default function App() {
               </p>
             </article>
             <article className="about-card">
-              <p className="eyebrow">Release notes</p>
-              <h2>Current package assumptions</h2>
+              <p className="eyebrow">Current release notes</p>
+              <h2>Submission still needs hardening</h2>
               <ul>
                 <li>TADA 1B generation is local and offline once the model is available.</li>
                 <li>Licenses ship with the app resources for final packaging.</li>
-                <li>Sandboxing and App Store packaging still need the hardening pass we discussed.</li>
+                <li>Sandboxing and App Store packaging still need the engineering pass we discussed.</li>
               </ul>
             </article>
-          </section>
-        ) : null}
-      </main>
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

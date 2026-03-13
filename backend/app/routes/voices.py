@@ -44,11 +44,19 @@ async def clone_voice(
     gender: str | None = Form(default=None),
     color: str | None = Form(default=None),
     tags: str | None = Form(default=None),
-    transcript: str | None = Form(default=None),
+    transcript: str = Form(...),
 ) -> VoiceCloneResponse:
     services = request.app.state.services
     voice_id = str(uuid.uuid4())
     clone_path = services.paths.clones_dir / f"{voice_id}.wav"
+
+    transcript = transcript.strip()
+    if not transcript:
+        raise ApiError(
+            "transcript_required",
+            "A transcript matching the reference audio is required to clone a voice.",
+            400,
+        )
 
     with tempfile.NamedTemporaryFile(suffix=Path(audio.filename or "reference.wav").suffix, delete=False) as temp_file:
         temp_path = Path(temp_file.name)
@@ -56,9 +64,6 @@ async def clone_voice(
 
     quality = validate_reference_audio(temp_path, clone_path)
     temp_path.unlink(missing_ok=True)
-
-    if not transcript:
-        transcript = await services.engine.transcribe_reference(clone_path)
 
     now = utc_now().isoformat()
     voice = await services.db.create_clone_voice(
@@ -111,12 +116,20 @@ async def replace_reference(
     request: Request,
     voice_id: str,
     audio: UploadFile = File(...),
-    transcript: str | None = Form(default=None),
+    transcript: str = Form(...),
 ) -> VoiceCloneResponse:
     services = request.app.state.services
     voice = _ensure_voice(await services.db.get_voice(voice_id))
     if voice.type == "preset":
         raise ApiError("preset_immutable", "Preset voices cannot be modified.", 403)
+
+    transcript = transcript.strip()
+    if not transcript:
+        raise ApiError(
+            "transcript_required",
+            "A transcript matching the reference audio is required when updating a clone reference.",
+            400,
+        )
 
     target_path = services.db.resolve_relative_path(voice.reference_audio_path)
     if target_path is None:
@@ -128,8 +141,6 @@ async def replace_reference(
 
     quality = validate_reference_audio(temp_path, target_path)
     temp_path.unlink(missing_ok=True)
-    if not transcript:
-        transcript = await services.engine.transcribe_reference(target_path)
 
     updated = await services.db.update_voice(
         voice_id,
