@@ -9,6 +9,7 @@
     "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:backend\"",
     "build:web": "npm --prefix frontend run build",
     "build:sidecar": "sh ./scripts/build-sidecar.sh",
+    "package:appstore": "./scripts/package_appstore.sh",
     "lint:web": "npm --prefix frontend run lint",
     "tauri:dev": "tauri dev",
     "tauri:build": "npm run build:web && npm run build:sidecar && tauri build",
@@ -19,4 +20,3 @@
     "concurrently": "^9.1.2"
   }
 }
-
