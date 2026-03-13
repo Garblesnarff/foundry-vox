@@ -1,16 +1,17 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "./lib/api";
 import type { Generation, HealthResponse, ProgressEvent, Settings, Voice } from "./types";
 
 type View = "forge" | "library" | "history" | "settings" | "about";
+type LibraryFilter = "all" | "preset" | "clone";
+type LibraryMode = "grid" | "list";
+type HistorySort = "newest" | "longest" | "shortest";
 
-const NAV_ITEMS: Array<{ id: View; label: string; hint: string }> = [
-  { id: "forge", label: "Forge", hint: "Generate audio" },
-  { id: "library", label: "Library", hint: "Voices and cloning" },
-  { id: "history", label: "History", hint: "Recent renders" },
-  { id: "settings", label: "Settings", hint: "Performance and output" },
-  { id: "about", label: "About", hint: "Shipping and legal" },
+const TOP_LEVEL_VIEWS: Array<{ id: Extract<View, "forge" | "library" | "history">; label: string }> = [
+  { id: "forge", label: "Forge" },
+  { id: "library", label: "Library" },
+  { id: "history", label: "History" },
 ];
 
 const DEFAULT_SETTINGS: Settings = {
@@ -36,6 +37,74 @@ function relativeDate(iso: string) {
   });
 }
 
+function accentColor(voice: Voice | null | undefined) {
+  return voice?.color ?? "#E8A849";
+}
+
+function waveformHeight(index: number, max = 88) {
+  const shaped = Math.sin(index * 0.34) * 18 + Math.cos(index * 0.63) * 14 + max * 0.45;
+  return Math.max(8, Math.min(max, shaped));
+}
+
+function miniWaveHeight(index: number, max = 24) {
+  const shaped = Math.sin(index * 0.55) * (max * 0.28) + Math.cos(index * 0.95) * (max * 0.18) + max * 0.48;
+  return Math.max(4, Math.min(max, shaped));
+}
+
+function WaveformBars({ active, color, barCount = 56 }: { active: boolean; color: string; barCount?: number }) {
+  return (
+    <div className="waveform-bars" aria-hidden="true">
+      {Array.from({ length: barCount }).map((_, index) => (
+        <span
+          key={index}
+          className={`waveform-bar ${active ? "active" : ""}`}
+          style={{
+            height: `${active ? waveformHeight(index) : 8}px`,
+            animationDelay: `${index * 0.025}s`,
+            ["--bar-color" as string]: color,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MiniWaveform({ color, bars = 18 }: { color: string; bars?: number }) {
+  return (
+    <div className="mini-waveform" aria-hidden="true">
+      {Array.from({ length: bars }).map((_, index) => (
+        <span
+          key={index}
+          className="mini-waveform-bar"
+          style={{
+            height: `${miniWaveHeight(index)}px`,
+            ["--bar-color" as string]: color,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function EmberParticles({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <div className="ember-layer" aria-hidden="true">
+      {Array.from({ length: 12 }).map((_, index) => (
+        <span
+          key={index}
+          className="ember-particle"
+          style={{
+            left: `${10 + index * 7}%`,
+            animationDelay: `${index * 0.22}s`,
+            animationDuration: `${2.3 + (index % 5) * 0.38}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [view, setView] = useState<View>("forge");
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -43,10 +112,11 @@ export default function App() {
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("");
   const [history, setHistory] = useState<Generation[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [text, setText] = useState("The forge burns brightest at midnight. Every voice begins as raw metal, waiting for its final shape.");
+  const [text, setText] = useState(
+    "The forge burns brightest at midnight. Every voice begins as raw metal, waiting for its final shape.",
+  );
   const [styleDirection, setStyleDirection] = useState("");
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
-  const [latestGeneration, setLatestGeneration] = useState<Generation | null>(null);
   const [error, setError] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
@@ -58,12 +128,56 @@ export default function App() {
   const [cloneQuality, setCloneQuality] = useState<string>("");
   const [historySearch, setHistorySearch] = useState("");
   const [historySelection, setHistorySelection] = useState<string[]>([]);
+  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
+  const [libraryMode, setLibraryMode] = useState<LibraryMode>("grid");
+  const [previewVoiceId, setPreviewVoiceId] = useState<string | null>(null);
+  const [historyVoiceFilter, setHistoryVoiceFilter] = useState("all");
+  const [historySort, setHistorySort] = useState<HistorySort>("newest");
   const eventSourceRef = useRef<EventSource | null>(null);
+  const scriptImportRef = useRef<HTMLInputElement | null>(null);
 
   const selectedVoice = useMemo(
     () => voices.find((voice) => voice.id === selectedVoiceId) ?? voices[0] ?? null,
     [selectedVoiceId, voices],
   );
+
+  const voiceMap = useMemo(() => new Map(voices.map((voice) => [voice.id, voice])), [voices]);
+
+  const filteredVoices = useMemo(
+    () => voices.filter((voice) => (libraryFilter === "all" ? true : voice.type === libraryFilter)),
+    [libraryFilter, voices],
+  );
+
+  const filteredHistory = useMemo(() => {
+    const byVoice = historyVoiceFilter === "all" ? history : history.filter((entry) => entry.voice_id === historyVoiceFilter);
+    const bySearch = historySearch
+      ? byVoice.filter((entry) => entry.text.toLowerCase().includes(historySearch.toLowerCase()))
+      : byVoice;
+    return [...bySearch].sort((left, right) => {
+      if (historySort === "longest") return right.duration_seconds - left.duration_seconds;
+      if (historySort === "shortest") return left.duration_seconds - right.duration_seconds;
+      return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+    });
+  }, [history, historySearch, historySort, historyVoiceFilter]);
+
+  const historySummary = useMemo(() => {
+    const totalAudioSeconds = history.reduce((sum, entry) => sum + entry.duration_seconds, 0);
+    const totalGenerationSeconds = history.reduce((sum, entry) => sum + entry.generation_time_seconds, 0);
+    const avgRtf = history.length ? history.reduce((sum, entry) => sum + entry.rtf, 0) / history.length : 0;
+    return { totalAudioSeconds, totalGenerationSeconds, avgRtf };
+  }, [history]);
+  const latestGeneration = useMemo(() => history[0] ?? null, [history]);
+
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  const charCount = text.length;
+  const estimatedDuration = Math.max(1, Math.round(wordCount * 0.45));
+  const estimatedForgeTime = Math.max(1, Math.round(estimatedDuration * 3.5));
+  const canGenerate = !busy && Boolean(selectedVoice) && Boolean(text.trim());
+
+  async function refreshHistory() {
+    const historyData = await api.getHistory(new URLSearchParams({ limit: "50", sort: "newest" }));
+    setHistory(historyData.generations);
+  }
 
   async function refreshAll() {
     try {
@@ -77,7 +191,6 @@ export default function App() {
       setVoices(voicesData.voices);
       setSelectedVoiceId((current) => current || voicesData.voices[0]?.id || "");
       setHistory(historyData.generations);
-      setLatestGeneration(historyData.generations[0] ?? null);
       setSettings(settingsData);
       setError("");
     } catch (requestError) {
@@ -94,6 +207,9 @@ export default function App() {
         .catch((requestError) => {
           setError(requestError instanceof Error ? requestError.message : "Unable to reach the backend.");
         });
+      void refreshHistory().catch(() => {
+        // Keep the current history if a background refresh misses once.
+      });
     }, 3000);
     return () => {
       window.clearInterval(interval);
@@ -110,9 +226,11 @@ export default function App() {
       setError("Enter some text before generating.");
       return;
     }
+
     setBusy(true);
     setError("");
     setProgress({ status: "connecting", percent: 1 });
+
     try {
       eventSourceRef.current?.close();
       eventSourceRef.current = api.progressStream((event, type) => {
@@ -136,12 +254,17 @@ export default function App() {
         format: settings.output_format,
         sample_rate: settings.sample_rate,
       });
-      const historyData = await api.getHistory(new URLSearchParams({ limit: "50", sort: "newest" }));
-      setHistory(historyData.generations);
-      setLatestGeneration(historyData.generations[0] ?? response.generation);
+      setHistory((current) => {
+        const withoutDuplicate = current.filter((entry) => entry.id !== response.generation.id);
+        return [response.generation, ...withoutDuplicate];
+      });
       setView("forge");
       setProgress({ status: "complete", percent: 100, generation_id: response.generation.id });
       eventSourceRef.current?.close();
+      void refreshHistory()
+        .catch(() => {
+          // Keep the optimistic state if the background refresh fails.
+        });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Generation failed.");
     } finally {
@@ -173,6 +296,7 @@ export default function App() {
       setCloneName("");
       setCloneTranscript("");
       setCloneTags("personal, clone");
+      setView("library");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Voice cloning failed.");
     }
@@ -221,62 +345,82 @@ export default function App() {
     window.setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
 
-  const filteredHistory = history.filter((entry) =>
-    historySearch ? entry.text.toLowerCase().includes(historySearch.toLowerCase()) : true,
-  );
-  const canGenerate = !busy && Boolean(selectedVoice) && Boolean(text.trim());
+  async function handleVoicePreview(voiceId: string) {
+    setPreviewVoiceId(voiceId);
+    try {
+      const preview = new Audio(`${api.baseUrl}/voices/${voiceId}/preview`);
+      preview.addEventListener("ended", () => setPreviewVoiceId((current) => (current === voiceId ? null : current)), {
+        once: true,
+      });
+      await preview.play();
+    } catch {
+      setPreviewVoiceId(null);
+    }
+  }
+
+  async function handlePasteScript() {
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+      if (clipboardText) {
+        setText(clipboardText);
+      }
+    } catch {
+      setError("Clipboard access was denied.");
+    }
+  }
+
+  function handleImportScript(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    void file.text().then((contents) => setText(contents));
+    event.target.value = "";
+  }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-block">
-          <div className="brand-mark">FV</div>
-          <div>
-            <p className="eyebrow">Local Voice Forge</p>
-            <h1>Foundry Vox</h1>
+    <div className="app-frame">
+      <header className="window-chrome">
+        <div className="chrome-left">
+          <div className="traffic-lights" aria-hidden="true">
+            <span className="traffic close" />
+            <span className="traffic minimize" />
+            <span className="traffic zoom" />
+          </div>
+          <div className="brand-lockup">
+            <div className="brand-mark">F</div>
+            <div>
+              <p className="eyebrow">Local Voice Forge</p>
+              <h1>Foundry Vox</h1>
+            </div>
           </div>
         </div>
-        <nav className="nav-stack">
-          {NAV_ITEMS.map((item) => (
+
+        <nav className="chrome-tabs">
+          {TOP_LEVEL_VIEWS.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${view === item.id ? "active" : ""}`}
+              className={`chrome-tab ${view === item.id ? "active" : ""}`}
               onClick={() => setView(item.id)}
             >
-              <span>{item.label}</span>
-              <small>{item.hint}</small>
+              {item.label}
             </button>
           ))}
         </nav>
-        <div className="sidebar-panel">
-          <p className="eyebrow">Engine</p>
-          <div className={`status-pill ${health?.status ?? "loading"}`}>{health?.status ?? "loading"}</div>
-          <p className="muted">
-            {health?.status === "error"
-              ? health.message
-              : health?.status === "warming_up"
-                ? "Priming caches so first real render is faster."
-                : "Runs locally on Apple Silicon with CPU float32 inference."}
-          </p>
+
+        <div className="chrome-right">
+          <div className="engine-pill">
+            <span className={`engine-dot ${health?.status ?? "loading"}`} />
+            <span>{health?.status === "ready" ? "Ready to forge" : health?.status ?? "loading"}</span>
+          </div>
+          <button className={`icon-button ${view === "about" ? "active" : ""}`} onClick={() => setView("about")}>
+            About
+          </button>
+          <button className={`icon-button ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")}>
+            Settings
+          </button>
         </div>
-      </aside>
+      </header>
 
-      <main className="main-shell">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Backend</p>
-            <h2>{health?.model_loaded ? "Ready to forge" : "Starting model engine"}</h2>
-          </div>
-          <div className="topbar-actions">
-            {cloneQuality ? <span className="quality-badge">{cloneQuality}</span> : null}
-            {selectedVoice ? (
-              <button className="ghost-button" onClick={() => setView("library")}>
-                {selectedVoice.name}
-              </button>
-            ) : null}
-          </div>
-        </header>
-
+      <main className="workspace-shell">
         {error ? (
           <section className="error-banner">
             <strong>{health?.error ?? "Action needed"}</strong>
@@ -285,28 +429,143 @@ export default function App() {
         ) : null}
 
         {view === "forge" ? (
-          <section className="forge-layout">
-            <div className="forge-panel">
-              <div className="panel-header">
-                <div>
-                  <p className="eyebrow">Compose</p>
-                  <h3>Text to speech</h3>
-                </div>
-                <div className="stats-inline">
-                  <span>{text.length} chars</span>
-                  <span>{text.trim().split(/\s+/).filter(Boolean).length} words</span>
-                </div>
+          <section className="forge-page">
+            <aside className="voice-rail">
+              <div className="rail-header">
+                <span className="eyebrow">Voices</span>
+                <button className="micro-button accent" onClick={() => setCloneOpen(true)}>
+                  + Clone
+                </button>
               </div>
 
-              <textarea
-                className="forge-textarea"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="Paste narration, script copy, or chapter text."
-              />
+              <div className="voice-rail-list">
+                {voices.map((voice) => {
+                  const selected = selectedVoice?.id === voice.id;
+                  const color = accentColor(voice);
+                  return (
+                    <button
+                      key={voice.id}
+                      className={`voice-rail-card ${selected ? "selected" : ""}`}
+                      style={{ ["--voice-accent" as string]: color }}
+                      onClick={() => setSelectedVoiceId(voice.id)}
+                    >
+                      <div className="voice-rail-mark">{voice.type === "clone" ? "◆" : "▪"}</div>
+                      <div className="voice-rail-copy">
+                        <strong>{voice.name}</strong>
+                        <span>
+                          {voice.type === "clone"
+                            ? `CLONED · ${voice.reference_duration_seconds?.toFixed(1) ?? "?"}s`
+                            : `PRESET · ${voice.gender ?? "?"}`}
+                        </span>
+                      </div>
+                      {selected ? <span className="voice-rail-dot" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
 
-              <div className="field-grid">
-                <label className="field-card">
+              <div className="selected-voice-card" style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
+                <span className="eyebrow">Selected</span>
+                <h3>{selectedVoice?.name ?? "No voice selected"}</h3>
+                <p>{selectedVoice?.description ?? "Choose a preset or clone a new reference voice."}</p>
+                <div className="chip-row">
+                  {(selectedVoice?.tags ?? []).slice(0, 3).map((tag) => (
+                    <span key={tag} className="chip">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            <section className="forge-stage">
+              <article className="forge-script-card">
+                <div className="section-header">
+                  <div>
+                    <p className="eyebrow">Script</p>
+                    <h2>Shape the narration</h2>
+                  </div>
+                  <div className="section-actions">
+                    <button className="micro-button" onClick={() => scriptImportRef.current?.click()}>
+                      Import .txt
+                    </button>
+                    <button className="micro-button" onClick={() => void handlePasteScript()}>
+                      Paste
+                    </button>
+                  </div>
+                </div>
+
+                <input
+                  ref={scriptImportRef}
+                  className="hidden-input"
+                  type="file"
+                  accept=".txt,.md"
+                  onChange={handleImportScript}
+                />
+
+                <textarea
+                  className="forge-textarea"
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  placeholder="Type or paste your script here..."
+                />
+
+                <div className="script-footer">
+                  <span>{wordCount} words · {charCount} chars</span>
+                  <span>~{estimatedDuration}s audio · ~{estimatedForgeTime}s forge time</span>
+                </div>
+              </article>
+
+              <article className={`forge-wave-card ${busy ? "active" : ""}`} style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
+                <EmberParticles active={busy} />
+                <div className="section-header">
+                  <div>
+                    <p className="eyebrow">Forge</p>
+                    <h2>{busy ? "Heating the metal" : "Ready for output"}</h2>
+                  </div>
+                  <div className="forge-wave-meta">
+                    <span>{selectedVoice?.name ?? "No voice"}</span>
+                    <span>{settings.output_format.toUpperCase()} · {settings.sample_rate / 1000}kHz</span>
+                  </div>
+                </div>
+
+                <WaveformBars active={busy || Boolean(latestGeneration)} color={accentColor(selectedVoice)} />
+
+                {progress ? (
+                  <div className="progress-block">
+                    <div className="progress-meta">
+                      <span>{progress.status}</span>
+                      <strong>{Math.round(progress.percent)}%</strong>
+                    </div>
+                    <div className="progress-track">
+                      <div className="progress-fill" style={{ width: `${progress.percent}%` }} />
+                    </div>
+                    <p className="muted">
+                      {progress.tokens_total
+                        ? `${progress.tokens_generated ?? 0} / ${progress.tokens_total} tokens`
+                        : "Local generation is running in the background."}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="wave-note">
+                    {health?.status === "ready"
+                      ? "The forge is primed. Generate locally with your selected voice and output format."
+                      : "The model is still warming up. Once ready, the first render will appear here."}
+                  </p>
+                )}
+              </article>
+            </section>
+
+            <aside className="forge-sidebar">
+              <article className="control-card">
+                <div className="section-header">
+                  <div>
+                    <p className="eyebrow">Direction</p>
+                    <h3>Performance settings</h3>
+                  </div>
+                </div>
+
+                <label className="control-field">
                   <span>Voice</span>
                   <select value={selectedVoice?.id ?? ""} onChange={(event) => setSelectedVoiceId(event.target.value)}>
                     {voices.map((voice) => (
@@ -316,8 +575,9 @@ export default function App() {
                     ))}
                   </select>
                 </label>
-                <label className="field-card">
-                  <span>Output</span>
+
+                <label className="control-field">
+                  <span>Output format</span>
                   <select
                     value={settings.output_format}
                     onChange={(event) => {
@@ -329,76 +589,38 @@ export default function App() {
                     <option value="aac">AAC</option>
                   </select>
                 </label>
-              </div>
 
-              <label className="field-card field-card-wide">
-                <span>Style direction</span>
-                <input
-                  value={styleDirection}
-                  onChange={(event) => setStyleDirection(event.target.value)}
-                  placeholder="Speak with warmth and excitement"
-                />
-              </label>
+                <label className="control-field">
+                  <span>Style direction</span>
+                  <input
+                    value={styleDirection}
+                    onChange={(event) => setStyleDirection(event.target.value)}
+                    placeholder="Warm, intimate, with calm pacing"
+                  />
+                </label>
 
-              <div className="action-row">
-                <button
-                  className="primary-button"
-                  onClick={() => void handleGenerate()}
-                  disabled={!canGenerate}
-                >
-                  {busy ? "Forging..." : "Generate Audio"}
-                </button>
-                <button className="ghost-button" onClick={() => setText("")}>
-                  Clear
-                </button>
-              </div>
-
-              <p className="muted">
-                Backend status: <strong>{health?.status ?? "loading"}</strong>
-              </p>
-
-              {progress ? (
-                <div className="progress-card">
-                  <div className="progress-header">
-                    <span>{progress.status}</span>
-                    <strong>{Math.round(progress.percent)}%</strong>
-                  </div>
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${progress.percent}%` }} />
-                  </div>
-                  {progress.tokens_total ? (
-                    <p className="muted">
-                      {progress.tokens_generated ?? 0} / {progress.tokens_total} tokens
-                    </p>
-                  ) : null}
+                <div className="button-row">
+                  <button className="primary-button" onClick={() => void handleGenerate()} disabled={!canGenerate}>
+                    {busy ? "Forging..." : "Generate audio"}
+                  </button>
+                  <button className="ghost-button" onClick={() => setText("")}>
+                    Clear
+                  </button>
                 </div>
-              ) : null}
-            </div>
+              </article>
 
-            <div className="hero-panel">
-              <div className="voice-hero" style={{ ["--voice-accent" as string]: selectedVoice?.color ?? "#E8A849" }}>
-                <p className="eyebrow">Selected voice</p>
-                <h3>{selectedVoice?.name ?? "No voice selected"}</h3>
-                <p>{selectedVoice?.description ?? "Choose a preset or clone a new reference voice."}</p>
-                <div className="chip-row">
-                  {(selectedVoice?.tags ?? []).map((tag) => (
-                    <span key={tag} className="chip">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="latest-card">
-                <div className="panel-header">
+              <article className="latest-render-card" style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
+                <div className="section-header">
                   <div>
                     <p className="eyebrow">Latest render</p>
                     <h3>{latestGeneration ? latestGeneration.voice_name : "Nothing forged yet"}</h3>
                   </div>
                   {latestGeneration ? <span className="quality-badge">{formatSeconds(latestGeneration.duration_seconds)}</span> : null}
                 </div>
+
                 {latestGeneration ? (
                   <>
+                    <MiniWaveform color={accentColor(voiceMap.get(latestGeneration.voice_id))} bars={30} />
                     <audio
                       className="audio-player"
                       controls
@@ -410,7 +632,7 @@ export default function App() {
                         <strong>{latestGeneration.rtf.toFixed(1)}x</strong>
                       </div>
                       <div>
-                        <span>Wall clock</span>
+                        <span>Forge time</span>
                         <strong>{formatSeconds(latestGeneration.generation_time_seconds)}</strong>
                       </div>
                       <div>
@@ -424,95 +646,159 @@ export default function App() {
                     </div>
                   </>
                 ) : (
-                  <p className="muted">
-                    Your next generation will appear here with inline playback and download-ready output.
-                  </p>
+                  <p className="muted">Your next generation will appear here with inline playback and export-ready metadata.</p>
                 )}
-              </div>
-            </div>
+              </article>
+            </aside>
           </section>
         ) : null}
 
         {view === "library" ? (
-          <section className="library-layout">
+          <section className="library-page">
             <div className="section-title">
               <div>
-                <p className="eyebrow">Voices</p>
-                <h3>Preset and cloned references</h3>
+                <p className="eyebrow">Voice Library</p>
+                <h2>Preset and cloned references</h2>
               </div>
-              <button className="primary-button" onClick={() => setCloneOpen(true)}>
-                Clone New Voice
-              </button>
+              <div className="section-actions">
+                <div className="toggle-group">
+                  {(["grid", "list"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      className={`toggle-button ${libraryMode === mode ? "active" : ""}`}
+                      onClick={() => setLibraryMode(mode)}
+                    >
+                      {mode === "grid" ? "Grid" : "List"}
+                    </button>
+                  ))}
+                </div>
+                <div className="toggle-group">
+                  {(["all", "preset", "clone"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      className={`toggle-button ${libraryFilter === filter ? "active" : ""}`}
+                      onClick={() => setLibraryFilter(filter)}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+                <button className="primary-button" onClick={() => setCloneOpen(true)}>
+                  Clone new voice
+                </button>
+              </div>
             </div>
 
-            <div className="voice-grid">
-              {voices.map((voice) => (
-                <article
-                  key={voice.id}
-                  className={`voice-card ${selectedVoiceId === voice.id ? "selected" : ""}`}
-                  style={{ ["--voice-accent" as string]: voice.color ?? "#E8A849" }}
-                  onClick={() => setSelectedVoiceId(voice.id)}
-                >
-                  <div className="voice-card-top">
-                    <div>
-                      <p className="eyebrow">{voice.type}</p>
-                      <h4>{voice.name}</h4>
-                    </div>
-                    <button
-                      className="ghost-button compact"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        const preview = new Audio(`${api.baseUrl}/voices/${voice.id}/preview`);
-                        void preview.play();
-                      }}
+            <div className="library-content">
+              <div className={`voice-grid ${libraryMode === "list" ? "list-mode" : ""}`}>
+                {filteredVoices.map((voice) => {
+                  const selected = selectedVoiceId === voice.id;
+                  const color = accentColor(voice);
+                  return (
+                    <article
+                      key={voice.id}
+                      className={`voice-card ${selected ? "selected" : ""}`}
+                      style={{ ["--voice-accent" as string]: color }}
+                      onClick={() => setSelectedVoiceId(voice.id)}
                     >
-                      Preview
+                      <div className="voice-card-top">
+                        <div className="voice-icon">{voice.type === "clone" ? "◆" : "▪"}</div>
+                        <div className="voice-card-copy">
+                          <p className="eyebrow">{voice.type}</p>
+                          <h4>{voice.name}</h4>
+                          <span>
+                            {voice.type === "clone"
+                              ? `${voice.reference_duration_seconds?.toFixed(1) ?? "?"}s reference`
+                              : `Preset · ${voice.gender ?? "Unknown"}`}
+                          </span>
+                        </div>
+                        <button
+                          className="micro-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleVoicePreview(voice.id);
+                          }}
+                        >
+                          {previewVoiceId === voice.id ? "Playing" : "Preview"}
+                        </button>
+                      </div>
+                      <MiniWaveform color={color} bars={28} />
+                      <p className="voice-description">{voice.description ?? "No description yet."}</p>
+                      <div className="chip-row">
+                        {voice.tags.map((tag) => (
+                          <span key={tag} className="chip">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              {selectedVoice ? (
+                <aside className="voice-detail-panel" style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
+                  <div className="voice-detail-head">
+                    <div className="voice-detail-mark">{selectedVoice.type === "clone" ? "◆" : "▪"}</div>
+                    <div>
+                      <p className="eyebrow">Voice detail</p>
+                      <h3>{selectedVoice.name}</h3>
+                    </div>
+                  </div>
+                  <p className="muted">{selectedVoice.description ?? "Choose a voice to inspect its metadata and reference profile."}</p>
+                  <MiniWaveform color={accentColor(selectedVoice)} bars={36} />
+                  <div className="detail-stats">
+                    <div>
+                      <span>Type</span>
+                      <strong>{selectedVoice.type === "clone" ? "Cloned voice" : "Stock preset"}</strong>
+                    </div>
+                    <div>
+                      <span>Gender</span>
+                      <strong>{selectedVoice.gender ?? "Unknown"}</strong>
+                    </div>
+                    <div>
+                      <span>Reference</span>
+                      <strong>
+                        {selectedVoice.reference_duration_seconds ? `${selectedVoice.reference_duration_seconds.toFixed(1)}s` : "Bundled"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Tags</span>
+                      <strong>{selectedVoice.tags.length}</strong>
+                    </div>
+                  </div>
+                  <div className="button-column">
+                    <button className="ghost-button" onClick={() => setView("forge")}>
+                      Use in forge
                     </button>
-                  </div>
-                  <p>{voice.description}</p>
-                  <div className="chip-row">
-                    {voice.tags.map((tag) => (
-                      <span key={tag} className="chip">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <footer className="voice-card-footer">
-                    <span>{voice.reference_duration_seconds ? `${voice.reference_duration_seconds.toFixed(1)}s ref` : "Bundled preset"}</span>
-                    {voice.type === "clone" ? (
-                      <button
-                        className="danger-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleDeleteVoice(voice.id);
-                        }}
-                      >
-                        Delete
+                    {selectedVoice.type === "clone" ? (
+                      <button className="danger-button" onClick={() => void handleDeleteVoice(selectedVoice.id)}>
+                        Delete clone
                       </button>
                     ) : null}
-                  </footer>
-                </article>
-              ))}
+                  </div>
+                </aside>
+              ) : null}
             </div>
 
             {cloneOpen ? (
               <form className="modal" onSubmit={(event) => void handleCloneSubmit(event)}>
                 <div className="modal-card">
-                  <div className="panel-header">
+                  <div className="section-header">
                     <div>
                       <p className="eyebrow">Clone voice</p>
-                      <h3>Reference upload</h3>
+                      <h2>Reference upload</h2>
                     </div>
-                    <button type="button" className="ghost-button compact" onClick={() => setCloneOpen(false)}>
+                    <button type="button" className="icon-button" onClick={() => setCloneOpen(false)}>
                       Close
                     </button>
                   </div>
-                  <div className="field-grid">
-                    <label className="field-card">
+                  <div className="modal-grid">
+                    <label className="control-field">
                       <span>Name</span>
                       <input value={cloneName} onChange={(event) => setCloneName(event.target.value)} required />
                     </label>
-                    <label className="field-card">
+                    <label className="control-field">
                       <span>Gender</span>
                       <select value={cloneGender} onChange={(event) => setCloneGender(event.target.value)}>
                         <option value="F">Female</option>
@@ -520,29 +806,29 @@ export default function App() {
                         <option value="O">Other</option>
                       </select>
                     </label>
+                    <label className="control-field control-field-wide">
+                      <span>Reference audio</span>
+                      <input
+                        type="file"
+                        accept=".wav,.mp3,.m4a,.aac"
+                        onChange={(event) => setCloneFile(event.target.files?.[0] ?? null)}
+                        required
+                      />
+                    </label>
+                    <label className="control-field control-field-wide">
+                      <span>Manual transcript</span>
+                      <textarea
+                        value={cloneTranscript}
+                        onChange={(event) => setCloneTranscript(event.target.value)}
+                        placeholder="Leave blank to let TADA transcribe the reference."
+                      />
+                    </label>
+                    <label className="control-field control-field-wide">
+                      <span>Tags</span>
+                      <input value={cloneTags} onChange={(event) => setCloneTags(event.target.value)} />
+                    </label>
                   </div>
-                  <label className="field-card field-card-wide">
-                    <span>Reference audio</span>
-                    <input
-                      type="file"
-                      accept=".wav,.mp3,.m4a,.aac"
-                      onChange={(event) => setCloneFile(event.target.files?.[0] ?? null)}
-                      required
-                    />
-                  </label>
-                  <label className="field-card field-card-wide">
-                    <span>Manual transcript</span>
-                    <textarea
-                      value={cloneTranscript}
-                      onChange={(event) => setCloneTranscript(event.target.value)}
-                      placeholder="Leave blank to let TADA transcribe the reference."
-                    />
-                  </label>
-                  <label className="field-card field-card-wide">
-                    <span>Tags</span>
-                    <input value={cloneTags} onChange={(event) => setCloneTags(event.target.value)} />
-                  </label>
-                  <div className="action-row">
+                  <div className="button-row">
                     <button className="primary-button" type="submit">
                       Create clone
                     </button>
@@ -557,13 +843,13 @@ export default function App() {
         ) : null}
 
         {view === "history" ? (
-          <section className="history-layout">
+          <section className="history-page">
             <div className="section-title">
               <div>
-                <p className="eyebrow">History</p>
-                <h3>Rendered audio archive</h3>
+                <p className="eyebrow">Forge History</p>
+                <h2>Rendered audio archive</h2>
               </div>
-              <div className="action-row">
+              <div className="button-row">
                 <button className="ghost-button" onClick={() => void handleExportSelection("zip")}>
                   Export ZIP
                 </button>
@@ -576,6 +862,25 @@ export default function App() {
               </div>
             </div>
 
+            <div className="stats-row">
+              <article className="stat-card accent-gold">
+                <span>Total audio</span>
+                <strong>{formatSeconds(historySummary.totalAudioSeconds)}</strong>
+              </article>
+              <article className="stat-card accent-copper">
+                <span>Generations</span>
+                <strong>{history.length}</strong>
+              </article>
+              <article className="stat-card accent-olive">
+                <span>Forge time</span>
+                <strong>{formatSeconds(historySummary.totalGenerationSeconds)}</strong>
+              </article>
+              <article className="stat-card accent-plum">
+                <span>Avg RTF</span>
+                <strong>{historySummary.avgRtf.toFixed(1)}x</strong>
+              </article>
+            </div>
+
             <div className="history-toolbar">
               <input
                 className="search-input"
@@ -583,14 +888,28 @@ export default function App() {
                 onChange={(event) => setHistorySearch(event.target.value)}
                 placeholder="Search generated text"
               />
-              <p className="muted">{filteredHistory.length} entries</p>
+              <select value={historyVoiceFilter} onChange={(event) => setHistoryVoiceFilter(event.target.value)}>
+                <option value="all">All voices</option>
+                {voices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name}
+                  </option>
+                ))}
+              </select>
+              <select value={historySort} onChange={(event) => setHistorySort(event.target.value as HistorySort)}>
+                <option value="newest">Newest first</option>
+                <option value="longest">Longest first</option>
+                <option value="shortest">Shortest first</option>
+              </select>
             </div>
 
             <div className="history-list">
               {filteredHistory.map((entry) => {
                 const checked = historySelection.includes(entry.id);
+                const voice = voiceMap.get(entry.voice_id);
+                const color = accentColor(voice);
                 return (
-                  <article key={entry.id} className="history-card">
+                  <article key={entry.id} className="history-card" style={{ ["--voice-accent" as string]: color }}>
                     <label className="history-check">
                       <input
                         type="checkbox"
@@ -602,10 +921,15 @@ export default function App() {
                         }
                       />
                     </label>
+                    <button className="history-play">{checked ? "■" : "▶"}</button>
                     <div className="history-copy">
-                      <h4>{entry.voice_name}</h4>
                       <p>{entry.text}</p>
+                      <MiniWaveform color={color} bars={34} />
                       <div className="history-meta">
+                        <span className="voice-tag">
+                          <i style={{ ["--voice-accent" as string]: color }} />
+                          {entry.voice_name}
+                        </span>
                         <span>{formatSeconds(entry.duration_seconds)}</span>
                         <span>{entry.rtf.toFixed(1)}x RTF</span>
                         <span>{entry.format.toUpperCase()}</span>
@@ -614,9 +938,9 @@ export default function App() {
                     </div>
                     <div className="history-actions">
                       <audio controls src={`${api.baseUrl}/generate/${entry.id}/audio`} />
-                      <div className="action-row">
+                      <div className="button-row">
                         <a className="ghost-button compact" href={`${api.baseUrl}/generate/${entry.id}/download`}>
-                          Download
+                          Save
                         </a>
                         <button className="danger-button compact" onClick={() => void handleDeleteGeneration(entry.id)}>
                           Delete
@@ -626,20 +950,28 @@ export default function App() {
                   </article>
                 );
               })}
+
+              {filteredHistory.length === 0 ? (
+                <article className="empty-card">
+                  <h3>No forged clips match those filters.</h3>
+                  <p>Try clearing the search or render a fresh sample from the Forge tab.</p>
+                </article>
+              ) : null}
             </div>
           </section>
         ) : null}
 
         {view === "settings" ? (
-          <section className="settings-layout">
+          <section className="settings-page">
             <div className="section-title">
               <div>
                 <p className="eyebrow">Settings</p>
-                <h3>Performance, output, storage</h3>
+                <h2>Performance, output, storage</h2>
               </div>
             </div>
+
             <div className="settings-grid">
-              <label className="field-card">
+              <label className="control-field">
                 <span>CPU threads</span>
                 <input
                   type="number"
@@ -650,7 +982,7 @@ export default function App() {
                   onBlur={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
                 />
               </label>
-              <label className="field-card">
+              <label className="control-field">
                 <span>Sample rate</span>
                 <select
                   value={settings.sample_rate}
@@ -663,7 +995,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <label className="field-card">
+              <label className="control-field">
                 <span>Bit depth</span>
                 <select
                   value={settings.bit_depth}
@@ -676,7 +1008,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <label className="field-card">
+              <label className="control-field">
                 <span>Warmup on launch</span>
                 <select
                   value={String(settings.warmup_on_launch)}
@@ -687,7 +1019,8 @@ export default function App() {
                 </select>
               </label>
             </div>
-            <div className="field-card field-card-wide">
+
+            <label className="control-field control-field-wide">
               <span>Output directory</span>
               <div className="inline-path">
                 <input
@@ -699,28 +1032,27 @@ export default function App() {
                   Choose
                 </button>
               </div>
-            </div>
+            </label>
           </section>
         ) : null}
 
         {view === "about" ? (
-          <section className="about-layout">
+          <section className="about-page">
             <article className="about-card">
-              <p className="eyebrow">App Store readiness</p>
-              <h3>Built for an offline macOS bundle</h3>
+              <p className="eyebrow">App shape</p>
+              <h2>Built as an offline desktop forge</h2>
               <p>
-                Foundry Vox ships as a Tauri desktop shell with a bundled FastAPI sidecar, local SQLite state, and
-                Apple Silicon CPU inference. The release flow builds a native app plus a packaged backend executable for
-                distribution.
+                Foundry Vox ships as a Tauri macOS app with a bundled local backend, SQLite state, and Apple Silicon
+                inference. The interface is designed to feel like a dedicated desktop tool instead of a generic control panel.
               </p>
             </article>
             <article className="about-card">
-              <p className="eyebrow">Required notices</p>
-              <h3>Licensing</h3>
+              <p className="eyebrow">Release notes</p>
+              <h2>Current package assumptions</h2>
               <ul>
-                <li>Built with Llama</li>
-                <li>TADA MIT license bundled in the app resources</li>
-                <li>Llama 3.2 Community License bundled in the app resources</li>
+                <li>TADA 1B generation is local and offline once the model is available.</li>
+                <li>Licenses ship with the app resources for final packaging.</li>
+                <li>Sandboxing and App Store packaging still need the hardening pass we discussed.</li>
               </ul>
             </article>
           </section>

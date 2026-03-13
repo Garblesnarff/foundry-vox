@@ -16,7 +16,10 @@ interface ApiErrorShape {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const response = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    ...init,
+  });
   if (!response.ok) {
     const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
     throw new Error(error?.message ?? `Request failed with ${response.status}`);
@@ -108,4 +111,3 @@ export const api = {
     return source;
   },
 };
-
