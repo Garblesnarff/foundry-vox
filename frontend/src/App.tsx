@@ -172,12 +172,19 @@ export default function App() {
   const latestGeneration = useMemo(() => history[0] ?? null, [history]);
   const recentGenerations = useMemo(() => history.slice(0, 3), [history]);
   const setupActions = health?.setup_actions ?? [];
+  const engineReady = health?.status === "ready";
+  const engineWarming = health?.status === "warming_up" || health?.status === "loading";
+  const setupChecklist = [
+    { label: "Backend connected", done: Boolean(health) },
+    { label: "Model loaded", done: Boolean(health?.model_loaded) },
+    { label: "Warmup complete", done: Boolean(health?.warmed_up) || !settings.warmup_on_launch },
+  ];
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
   const charCount = text.length;
   const estimatedDuration = Math.max(1, Math.round(wordCount * 0.45));
   const estimatedForgeTime = Math.max(1, Math.round(estimatedDuration * 3.5));
-  const canGenerate = !busy && Boolean(selectedVoice) && Boolean(text.trim());
+  const canGenerate = engineReady && !busy && Boolean(selectedVoice) && Boolean(text.trim());
 
   async function refreshHistory() {
     const historyData = await api.getHistory(new URLSearchParams({ limit: "50", sort: "newest" }));
@@ -489,6 +496,14 @@ export default function App() {
                 ))}
               </div>
             ) : null}
+            <div className="setup-checklist">
+              {setupChecklist.map((item) => (
+                <div key={item.label} className={`setup-check ${item.done ? "done" : ""}`}>
+                  <span>{item.done ? "✓" : "·"}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
           </section>
         ) : null}
 
@@ -666,12 +681,18 @@ export default function App() {
 
                 <div className="button-row">
                   <button className="primary-button" onClick={() => void handleGenerate()} disabled={!canGenerate}>
-                    {busy ? "Forging..." : "Forge voice  cmd+enter"}
+                    {busy ? "Forging..." : engineReady ? "Forge voice  cmd+enter" : engineWarming ? "Preparing engine..." : "Generation unavailable"}
                   </button>
                   <button className="ghost-button" onClick={() => setText("")}>
                     Clear
                   </button>
                 </div>
+                {!engineReady ? (
+                  <p className="field-help">
+                    {health?.setup_detail ??
+                      "Generation unlocks once the local model finishes loading and warmup completes."}
+                  </p>
+                ) : null}
               </article>
 
               <article className="latest-render-card" style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
@@ -835,12 +856,13 @@ export default function App() {
                         </div>
                         <button
                           className="micro-button"
+                          disabled={!engineReady}
                           onClick={(event) => {
                             event.stopPropagation();
                             void handleVoicePreview(voice.id);
                           }}
                         >
-                          {previewVoiceId === voice.id ? "Playing" : "Preview"}
+                          {!engineReady ? "Setup" : previewVoiceId === voice.id ? "Playing" : "Preview"}
                         </button>
                       </div>
                       <MiniWaveform color={color} bars={28} />
