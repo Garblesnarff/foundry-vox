@@ -67,7 +67,7 @@ async def generate_speech(request: Request, payload: GenerationRequest) -> Gener
     output_format = payload.format or settings.get("output_format", "wav")
     sample_rate = payload.sample_rate or int(settings.get("sample_rate", "24000"))
     bit_depth = int(settings.get("bit_depth", "16"))
-    output_dir = Path(settings.get("output_directory", str(services.paths.output_dir))).expanduser()
+    output_dir = services.paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     voice_audio_path = services.db.resolve_relative_path(voice.reference_audio_path)

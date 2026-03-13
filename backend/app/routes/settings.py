@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import os
-from pathlib import Path
 
 from fastapi import APIRouter, Request
 
-from ..audio import ensure_writable_directory
 from ..config import default_output_directory
 from ..errors import ApiError
 from ..models import DirectoryChoiceResponse, PatchSettingsRequest, SettingsResponse
@@ -46,7 +44,7 @@ async def patch_settings(request: Request, payload: PatchSettingsRequest) -> Set
             )
 
     if "output_directory" in changes:
-        ensure_writable_directory(Path(changes["output_directory"]).expanduser())
+        changes.pop("output_directory")
 
     new_values = {
         key: str(value).lower() if isinstance(value, bool) else str(value)

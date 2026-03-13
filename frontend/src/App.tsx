@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
 import type { Generation, HealthResponse, ProgressEvent, Settings, Voice } from "./types";
 
@@ -323,14 +324,6 @@ export default function App() {
     setHistorySelection([]);
   }
 
-  async function handlePickDirectory() {
-    const selected = await open({ directory: true, multiple: false, title: "Choose output directory" });
-    if (typeof selected === "string" && selected.length > 0) {
-      const updated = await api.patchSettings({ output_directory: selected });
-      setSettings(updated);
-    }
-  }
-
   async function handleSaveSettings(patch: Partial<Settings>) {
     const updated = await api.patchSettings(patch);
     setSettings(updated);
@@ -343,9 +336,28 @@ export default function App() {
       mode,
       format: settings.output_format,
     });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+    const extension = mode === "zip" ? "zip" : settings.output_format;
+    const destination = await save({
+      title: mode === "zip" ? "Save export archive" : "Save stitched audio",
+      defaultPath: `foundry-vox-export.${extension}`,
+    });
+    if (!destination) return;
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    await writeFile(destination, bytes);
+  }
+
+  async function handleSaveGeneration(entry: Generation) {
+    const timestamp = entry.created_at.replace(/:/g, "-").replace(/\.\d+Z$/, "Z");
+    const destination = await save({
+      title: "Save rendered audio",
+      defaultPath: `foundry-vox-${entry.voice_name.toLowerCase().replace(/\s+/g, "-")}-${timestamp}.${entry.format}`,
+    });
+    if (!destination) return;
+
+    const blob = await api.downloadGenerationAudio(entry.id);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    await writeFile(destination, bytes);
   }
 
   async function handleVoicePreview(voiceId: string) {
@@ -960,9 +972,9 @@ export default function App() {
                     <div className="history-actions">
                       <audio controls src={`${api.baseUrl}/generate/${entry.id}/audio`} />
                       <div className="button-row">
-                        <a className="ghost-button compact" href={`${api.baseUrl}/generate/${entry.id}/download`}>
+                        <button className="ghost-button compact" onClick={() => void handleSaveGeneration(entry)}>
                           Save
-                        </a>
+                        </button>
                         <button className="danger-button compact" onClick={() => void handleDeleteGeneration(entry.id)}>
                           Delete
                         </button>
@@ -1152,17 +1164,13 @@ export default function App() {
             </section>
 
             <section className="settings-block">
-              <p className="eyebrow">Output directory</p>
+              <p className="eyebrow">Internal storage</p>
               <div className="inline-path">
-                <input
-                  value={settings.output_directory}
-                  onChange={(event) => setSettings((current) => ({ ...current, output_directory: event.target.value }))}
-                  onBlur={() => void handleSaveSettings({ output_directory: settings.output_directory })}
-                />
-                <button className="ghost-button" onClick={() => void handlePickDirectory()}>
-                  Choose
-                </button>
+                <input value={settings.output_directory} readOnly />
               </div>
+              <p className="field-help">
+                Foundry Vox keeps working renders inside its app data container. Use Save or Export when you want a copy in a user folder.
+              </p>
             </section>
 
             <section className="settings-footer">

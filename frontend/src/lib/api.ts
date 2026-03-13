@@ -27,6 +27,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function fetchBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    cache: "no-store",
+    ...init,
+  });
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
+    throw new Error(error?.message ?? `Request failed with ${response.status}`);
+  }
+  return response.blob();
+}
+
 export const api = {
   baseUrl: API_BASE,
   getHealth: () => request<HealthResponse>("/health"),
@@ -78,6 +90,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
+  downloadGenerationAudio: (generationId: string) => fetchBlob(`/generate/${generationId}/download`),
   exportBatch: async (payload: {
     generation_ids: string[];
     mode: "zip" | "concatenate";
