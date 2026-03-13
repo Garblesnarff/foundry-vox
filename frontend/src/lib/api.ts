@@ -141,12 +141,7 @@ export const api = {
   updateVoice: (voiceId: string, payload: Record<string, unknown>) =>
     invokeBackend<{ voice: Voice }>("backend_update_voice", { voiceId, payload }),
   deleteVoice: (voiceId: string) => invokeBackend<{ deleted: boolean }>("backend_delete_voice", { voiceId }),
-  generate: (payload: Record<string, unknown>) =>
-    request<{ generation: Generation }>("/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
+  generate: (payload: Record<string, unknown>) => invokeBackend<{ generation: Generation }>("backend_generate", { payload }),
   getHistory: (params: URLSearchParams) =>
     invokeBackend<HistoryResponse>("backend_get_history", { query: params.toString() }),
   getHistoryStats: () => invokeBackend<HistoryStats>("backend_get_history_stats"),

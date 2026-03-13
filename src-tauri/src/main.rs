@@ -194,6 +194,15 @@ async fn backend_clear_history(
     backend_request(&runtime, &client, Method::DELETE, "/history", None).await
 }
 
+#[tauri::command]
+async fn backend_generate(
+    payload: Value,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(&runtime, &client, Method::POST, "/generate", Some(payload)).await
+}
+
 fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
@@ -286,7 +295,8 @@ fn main() {
             backend_update_voice,
             backend_delete_voice,
             backend_delete_history_item,
-            backend_clear_history
+            backend_clear_history,
+            backend_generate
         ])
         .run(tauri::generate_context!())
         .expect("error while running Foundry Vox");
