@@ -287,6 +287,7 @@ input::placeholder {
 }
 
 .error-banner,
+.setup-card,
 .voice-rail,
 .forge-script-card,
 .forge-wave-card,
@@ -318,6 +319,75 @@ input::placeholder {
 .error-banner p {
   margin: 6px 0 0;
   color: #dfc5c5;
+}
+
+.setup-card {
+  padding: 18px;
+  border-radius: 14px;
+  display: grid;
+  gap: 14px;
+  background:
+    linear-gradient(180deg, rgba(28, 24, 20, 0.98), rgba(22, 19, 16, 0.95)),
+    radial-gradient(circle at top right, rgba(232, 168, 73, 0.08), transparent 30%);
+}
+
+.setup-card.ready {
+  display: none;
+}
+
+.setup-copy h2 {
+  margin: 0 0 6px;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+}
+
+.setup-copy p:last-child {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.setup-meta,
+.setup-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.setup-meta {
+  color: var(--text-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.status-pill.loading,
+.status-pill.warming_up,
+.status-pill.generating {
+  color: var(--gold);
+  border-color: rgba(232, 168, 73, 0.28);
+}
+
+.status-pill.error {
+  color: #e3b0b0;
+  border-color: rgba(169, 94, 94, 0.35);
+}
+
+.setup-action {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-soft);
+  font-size: 12px;
 }
 
 .forge-page {

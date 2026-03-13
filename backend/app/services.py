@@ -40,6 +40,9 @@ class HealthState:
     status: str = "loading"
     error: str | None = None
     message: str | None = None
+    setup_title: str | None = None
+    setup_detail: str | None = None
+    setup_actions: list[str] = field(default_factory=list)
 
 
 @dataclass

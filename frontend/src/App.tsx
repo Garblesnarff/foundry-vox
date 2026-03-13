@@ -171,6 +171,7 @@ export default function App() {
   }, [history]);
   const latestGeneration = useMemo(() => history[0] ?? null, [history]);
   const recentGenerations = useMemo(() => history.slice(0, 3), [history]);
+  const setupActions = health?.setup_actions ?? [];
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
   const charCount = text.length;
@@ -459,6 +460,35 @@ export default function App() {
           <section className="error-banner">
             <strong>{health?.error ?? "Action needed"}</strong>
             <p>{error}</p>
+          </section>
+        ) : null}
+
+        {health && health.status !== "ready" ? (
+          <section className={`setup-card ${health.status}`}>
+            <div className="setup-copy">
+              <p className="eyebrow">Engine setup</p>
+              <h2>{health.setup_title ?? (health.status === "warming_up" ? "Warming up the model" : "Preparing the voice engine")}</h2>
+              <p>
+                {health.setup_detail ??
+                  health.message ??
+                  "Foundry Vox is still preparing its local runtime before generation becomes available."}
+              </p>
+            </div>
+            <div className="setup-meta">
+              <span className={`status-pill ${health.status}`}>{health.status}</span>
+              <span>{health.model.toUpperCase()}</span>
+              <span>{health.device}</span>
+              <span>{health.dtype}</span>
+            </div>
+            {setupActions.length > 0 ? (
+              <div className="setup-actions">
+                {setupActions.map((action) => (
+                  <div key={action} className="setup-action">
+                    {action}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </section>
         ) : null}
 

@@ -20,4 +20,7 @@ async def get_health(request: Request) -> HealthResponse:
         platform="darwin-arm64",
         error=services.health.error,
         message=services.health.message,
+        setup_title=services.health.setup_title,
+        setup_detail=services.health.setup_detail,
+        setup_actions=services.health.setup_actions,
     )

@@ -163,6 +163,9 @@ class HealthResponse(BaseModel):
     platform: str
     error: str | None = None
     message: str | None = None
+    setup_title: str | None = None
+    setup_detail: str | None = None
+    setup_actions: list[str] = Field(default_factory=list)
 
 
 class ProgressEvent(BaseModel):
@@ -221,4 +224,3 @@ def generation_from_row(row: dict[str, Any]) -> GenerationRecord:
         word_count=row["word_count"],
         created_at=row["created_at"],
     )
-

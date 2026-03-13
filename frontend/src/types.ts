@@ -27,6 +27,9 @@ export interface HealthResponse {
   platform: string;
   error?: string | null;
   message?: string | null;
+  setup_title?: string | null;
+  setup_detail?: string | null;
+  setup_actions?: string[];
 }
 
 export interface Generation {
@@ -79,4 +82,3 @@ export interface ProgressEvent {
   generation_id?: string | null;
   message?: string | null;
 }
-

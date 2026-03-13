@@ -52,6 +52,9 @@ async def _bootstrap_model(app: FastAPI) -> None:
 
     try:
         services.health.status = "loading"
+        services.health.setup_title = "Preparing the voice engine"
+        services.health.setup_detail = "Foundry Vox is checking local model access and loading the selected runtime."
+        services.health.setup_actions = []
         await services.engine.check_auth()
         await services.engine.load_model()
         if settings_data.get("warmup_on_launch", "true").lower() == "true":
@@ -61,16 +64,46 @@ async def _bootstrap_model(app: FastAPI) -> None:
                 warmup_path = services.db.resolve_relative_path(warmup_voice.reference_audio_path)
                 if warmup_path is not None:
                     services.health.status = "warming_up"
+                    services.health.setup_title = "Warming up the model"
+                    services.health.setup_detail = "A short internal render is running so your first real generation feels faster."
+                    services.health.setup_actions = []
                     await services.engine.warmup(
                         warmup_path, warmup_voice.reference_text or "Hello world."
                     )
         services.health.status = "ready"
         services.health.error = None
         services.health.message = None
+        services.health.setup_title = None
+        services.health.setup_detail = None
+        services.health.setup_actions = []
     except ApiError as exc:
         services.health.status = "error"
         services.health.error = exc.error
         services.health.message = exc.message
+        if exc.error == "huggingface_auth_required":
+            services.health.setup_title = "Model access needs approval"
+            services.health.setup_detail = (
+                "This app still depends on Hugging Face access to Meta's Llama tokenizer. "
+                "That is not yet a finished App Store flow."
+            )
+            services.health.setup_actions = [
+                "Sign in to Hugging Face on this Mac",
+                "Accept the Meta Llama 3.2 license",
+                "Restart Foundry Vox after access is confirmed",
+            ]
+        elif exc.error == "model_error":
+            services.health.setup_title = "The local ML runtime is unavailable"
+            services.health.setup_detail = (
+                "Foundry Vox could not finish loading its on-device model stack."
+            )
+            services.health.setup_actions = [
+                "Verify the packaged model/runtime files are present",
+                "Restart the app and wait for the engine to finish loading",
+            ]
+        else:
+            services.health.setup_title = "Foundry Vox needs attention"
+            services.health.setup_detail = exc.message
+            services.health.setup_actions = []
 
 
 @asynccontextmanager
