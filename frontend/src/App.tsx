@@ -77,6 +77,7 @@ export default function App() {
       setVoices(voicesData.voices);
       setSelectedVoiceId((current) => current || voicesData.voices[0]?.id || "");
       setHistory(historyData.generations);
+      setLatestGeneration(historyData.generations[0] ?? null);
       setSettings(settingsData);
       setError("");
     } catch (requestError) {
@@ -101,20 +102,31 @@ export default function App() {
   }, []);
 
   async function handleGenerate() {
-    if (!selectedVoice) return;
+    if (!selectedVoice) {
+      setError("Select a voice before generating.");
+      return;
+    }
+    if (!text.trim()) {
+      setError("Enter some text before generating.");
+      return;
+    }
     setBusy(true);
     setError("");
     setProgress({ status: "connecting", percent: 1 });
-    eventSourceRef.current?.close();
-    eventSourceRef.current = api.progressStream((event, type) => {
-      if (type === "complete") {
-        setProgress({ status: "complete", percent: 100, generation_id: event.generation_id });
-      } else if (type === "error") {
-        setError(event.message ?? "Generation failed.");
-      } else {
-        setProgress(event);
-      }
-    });
+    try {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = api.progressStream((event, type) => {
+        if (type === "complete") {
+          setProgress({ status: "complete", percent: 100, generation_id: event.generation_id });
+        } else if (type === "error") {
+          setError(event.message ?? "Generation failed.");
+        } else {
+          setProgress(event);
+        }
+      });
+    } catch {
+      setProgress({ status: "starting", percent: 2 });
+    }
 
     try {
       const response = await api.generate({
@@ -124,10 +136,12 @@ export default function App() {
         format: settings.output_format,
         sample_rate: settings.sample_rate,
       });
-      setLatestGeneration(response.generation);
-      setHistory((current) => [response.generation, ...current]);
+      const historyData = await api.getHistory(new URLSearchParams({ limit: "50", sort: "newest" }));
+      setHistory(historyData.generations);
+      setLatestGeneration(historyData.generations[0] ?? response.generation);
       setView("forge");
       setProgress({ status: "complete", percent: 100, generation_id: response.generation.id });
+      eventSourceRef.current?.close();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Generation failed.");
     } finally {
@@ -210,6 +224,7 @@ export default function App() {
   const filteredHistory = history.filter((entry) =>
     historySearch ? entry.text.toLowerCase().includes(historySearch.toLowerCase()) : true,
   );
+  const canGenerate = !busy && Boolean(selectedVoice) && Boolean(text.trim());
 
   return (
     <div className="app-shell">
@@ -329,7 +344,7 @@ export default function App() {
                 <button
                   className="primary-button"
                   onClick={() => void handleGenerate()}
-                  disabled={busy || !selectedVoice || !health || health.status !== "ready"}
+                  disabled={!canGenerate}
                 >
                   {busy ? "Forging..." : "Generate Audio"}
                 </button>
@@ -337,6 +352,10 @@ export default function App() {
                   Clear
                 </button>
               </div>
+
+              <p className="muted">
+                Backend status: <strong>{health?.status ?? "loading"}</strong>
+              </p>
 
               {progress ? (
                 <div className="progress-card">
@@ -710,4 +729,3 @@ export default function App() {
     </div>
   );
 }
-

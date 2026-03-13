@@ -116,7 +116,13 @@ app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:*", "http://127.0.0.1:*", "tauri://localhost"],
+    allow_origins=[
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://tauri.localhost",
+        "tauri://localhost",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
