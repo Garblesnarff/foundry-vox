@@ -19,6 +19,11 @@ interface ApiErrorShape {
   details?: Record<string, unknown>;
 }
 
+interface HistoryResponse {
+  generations: Generation[];
+  total: number;
+}
+
 const DEFAULT_API_BASE = "http://127.0.0.1:3456/api/v1";
 
 let runtimeConfig: RuntimeConfig = {
@@ -91,13 +96,24 @@ async function fetchBlob(path: string, init?: RequestInit): Promise<Blob> {
   return response.blob();
 }
 
+async function invokeBackend<T>(command: string, payload?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(command, payload);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(typeof error === "string" ? error : "Request failed.");
+  }
+}
+
 export const api = {
   init: initRuntimeConfig,
   get baseUrl() {
     return runtimeConfig.apiBase;
   },
   mediaUrl: (path: string) => withToken(path),
-  getHealth: () => request<HealthResponse>("/health"),
+  getHealth: () => invokeBackend<HealthResponse>("backend_get_health"),
   getVoices: (type?: "preset" | "clone") =>
     request<{ voices: Voice[] }>(type ? `/voices?type=${type}` : "/voices"),
   getVoice: (voiceId: string) => request<{ voice: Voice }>(`/voices/${voiceId}`),
@@ -136,18 +152,14 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }),
-  getHistory: (params: URLSearchParams) => request<{ generations: Generation[]; total: number }>(`/history?${params}`),
-  getHistoryStats: () => request<HistoryStats>("/history/stats"),
+  getHistory: (params: URLSearchParams) =>
+    invokeBackend<HistoryResponse>("backend_get_history", { query: params.toString() }),
+  getHistoryStats: () => invokeBackend<HistoryStats>("backend_get_history_stats"),
   deleteHistoryItem: (generationId: string) =>
     request<{ deleted: boolean }>(`/history/${generationId}`, { method: "DELETE" }),
   clearHistory: () => request<{ deleted: number }>("/history", { method: "DELETE" }),
-  getSettings: () => request<Settings>("/settings"),
-  patchSettings: (payload: Partial<Settings>) =>
-    request<Settings>("/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
+  getSettings: () => invokeBackend<Settings>("backend_get_settings"),
+  patchSettings: (payload: Partial<Settings>) => invokeBackend<Settings>("backend_patch_settings", { payload }),
   downloadGenerationAudio: (generationId: string) => fetchBlob(`/generate/${generationId}/download`),
   exportBatch: async (payload: {
     generation_ids: string[];
