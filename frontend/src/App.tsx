@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "./lib/api";
 import type { Generation, HealthResponse, ProgressEvent, Settings, Voice } from "./types";
@@ -167,6 +167,7 @@ export default function App() {
     return { totalAudioSeconds, totalGenerationSeconds, avgRtf };
   }, [history]);
   const latestGeneration = useMemo(() => history[0] ?? null, [history]);
+  const recentGenerations = useMemo(() => history.slice(0, 3), [history]);
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
   const charCount = text.length;
@@ -376,6 +377,13 @@ export default function App() {
     event.target.value = "";
   }
 
+  function handleForgeEditorKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canGenerate) {
+      event.preventDefault();
+      void handleGenerate();
+    }
+  }
+
   return (
     <div className="app-frame">
       <header className="window-chrome">
@@ -507,6 +515,7 @@ export default function App() {
                   className="forge-textarea"
                   value={text}
                   onChange={(event) => setText(event.target.value)}
+                  onKeyDown={handleForgeEditorKeyDown}
                   placeholder="Type or paste your script here..."
                 />
 
@@ -601,7 +610,7 @@ export default function App() {
 
                 <div className="button-row">
                   <button className="primary-button" onClick={() => void handleGenerate()} disabled={!canGenerate}>
-                    {busy ? "Forging..." : "Generate audio"}
+                    {busy ? "Forging..." : "Forge voice  cmd+enter"}
                   </button>
                   <button className="ghost-button" onClick={() => setText("")}>
                     Clear
@@ -648,6 +657,62 @@ export default function App() {
                 ) : (
                   <p className="muted">Your next generation will appear here with inline playback and export-ready metadata.</p>
                 )}
+              </article>
+
+              <article className="recent-forges-card">
+                <div className="section-header">
+                  <div>
+                    <p className="eyebrow">Recent forges</p>
+                    <h3>Latest sessions</h3>
+                  </div>
+                  <button className="micro-button" onClick={() => setView("history")}>
+                    View all
+                  </button>
+                </div>
+                <div className="recent-forges-list">
+                  {recentGenerations.length > 0 ? (
+                    recentGenerations.map((entry) => (
+                      <button
+                        key={entry.id}
+                        className="recent-forge-item"
+                        onClick={() => setView("history")}
+                      >
+                        <p>{entry.text}</p>
+                        <div className="recent-forge-meta">
+                          <span>{entry.voice_name}</span>
+                          <span>
+                            {formatSeconds(entry.duration_seconds)} · {entry.rtf.toFixed(1)}x
+                          </span>
+                        </div>
+                        <div className="recent-forge-time">{relativeDate(entry.created_at)}</div>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="muted">Your recent renders will stack up here once you begin forging.</p>
+                  )}
+                </div>
+              </article>
+
+              <article className="session-card">
+                <p className="eyebrow">Session</p>
+                <div className="session-stats">
+                  <div>
+                    <span>Forged</span>
+                    <strong>{history.length} clips</strong>
+                  </div>
+                  <div>
+                    <span>Audio</span>
+                    <strong>{formatSeconds(historySummary.totalAudioSeconds)}</strong>
+                  </div>
+                  <div>
+                    <span>Avg RTF</span>
+                    <strong>{historySummary.avgRtf.toFixed(1)}x</strong>
+                  </div>
+                  <div>
+                    <span>Model</span>
+                    <strong>{health?.status === "ready" ? "Warmed up" : health?.status ?? "loading"}</strong>
+                  </div>
+                </div>
               </article>
             </aside>
           </section>
