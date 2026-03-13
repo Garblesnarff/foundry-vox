@@ -6,7 +6,13 @@ use tauri_plugin_shell::ShellExt;
 
 fn spawn_backend(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
-    let sidecar = app_handle.shell().sidecar("foundry-vox-backend")?;
+    let app_data_dir = app_handle.path().app_local_data_dir()?;
+    std::fs::create_dir_all(&app_data_dir)?;
+
+    let sidecar = app_handle
+        .shell()
+        .sidecar("foundry-vox-backend")?
+        .env("FOUNDRY_VOX_HOME", app_data_dir.to_string_lossy().to_string());
     let (mut rx, _child) = sidecar.spawn()?;
 
     tauri::async_runtime::spawn(async move {

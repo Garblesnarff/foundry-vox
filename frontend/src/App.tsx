@@ -20,7 +20,7 @@ const DEFAULT_SETTINGS: Settings = {
   output_format: "wav",
   sample_rate: 24000,
   bit_depth: 16,
-  output_directory: "~/Documents/FoundryVox/output",
+  output_directory: "~/Library/Application Support/Foundry Vox/output",
   warmup_on_launch: true,
 };
 

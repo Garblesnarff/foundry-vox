@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 
 from ..audio import ensure_writable_directory
+from ..config import default_output_directory
 from ..errors import ApiError
 from ..models import DirectoryChoiceResponse, PatchSettingsRequest, SettingsResponse
 
@@ -20,7 +21,7 @@ def _coerce_settings(settings: dict[str, str]) -> SettingsResponse:
         output_format=settings.get("output_format", "wav"),
         sample_rate=int(settings.get("sample_rate", "24000")),
         bit_depth=int(settings.get("bit_depth", "16")),
-        output_directory=settings.get("output_directory", "~/Documents/FoundryVox/output"),
+        output_directory=settings.get("output_directory", default_output_directory()),
         warmup_on_launch=settings.get("warmup_on_launch", "true").lower() == "true",
     )
 
