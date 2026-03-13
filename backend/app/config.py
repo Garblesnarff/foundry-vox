@@ -8,7 +8,7 @@ from pathlib import Path
 APP_NAME = "Foundry Vox"
 API_PREFIX = "/api/v1"
 DEFAULT_HOST = "127.0.0.1"
-DEFAULT_PORT = 3456
+DEFAULT_PORT = int(os.getenv("FOUNDRY_VOX_PORT", "3456"))
 
 
 def _default_app_home() -> Path:

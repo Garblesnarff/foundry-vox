@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
+use std::net::TcpListener;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
@@ -26,7 +27,18 @@ fn runtime_config(state: State<'_, RuntimeState>) -> RuntimeConfig {
     }
 }
 
-fn spawn_backend(app: &tauri::App, api_token: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    drop(listener);
+    Ok(port)
+}
+
+fn spawn_backend(
+    app: &tauri::App,
+    api_port: u16,
+    api_token: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
     let app_data_dir = app_handle.path().app_local_data_dir()?;
     std::fs::create_dir_all(&app_data_dir)?;
@@ -34,7 +46,8 @@ fn spawn_backend(app: &tauri::App, api_token: Option<&str>) -> Result<(), Box<dy
     let mut sidecar = app_handle
         .shell()
         .sidecar("foundry-vox-backend")?
-        .env("FOUNDRY_VOX_HOME", app_data_dir.to_string_lossy().to_string());
+        .env("FOUNDRY_VOX_HOME", app_data_dir.to_string_lossy().to_string())
+        .env("FOUNDRY_VOX_PORT", api_port.to_string());
 
     if let Some(token) = api_token {
         sidecar = sidecar.env("FOUNDRY_VOX_API_TOKEN", token.to_string());
@@ -69,7 +82,8 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let api_base = "http://127.0.0.1:3456/api/v1".to_string();
+            let api_port = if cfg!(debug_assertions) { 3456 } else { open_loopback_port()? };
+            let api_base = format!("http://127.0.0.1:{api_port}/api/v1");
             let api_token = if cfg!(debug_assertions) {
                 None
             } else {
@@ -82,7 +96,7 @@ fn main() {
             });
 
             if !cfg!(debug_assertions) {
-                spawn_backend(app, api_token.as_deref())?;
+                spawn_backend(app, api_port, api_token.as_deref())?;
             }
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
