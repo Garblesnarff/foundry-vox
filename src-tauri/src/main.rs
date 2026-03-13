@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use reqwest::Method;
+use reqwest::{multipart, Method};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
@@ -18,6 +18,17 @@ struct RuntimeState {
 #[derive(Clone)]
 struct BackendClient {
     client: reqwest::Client,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CloneUploadPayload {
+    name: String,
+    gender: String,
+    transcript: String,
+    tags: String,
+    filename: String,
+    audio_bytes: Vec<u8>,
 }
 
 #[derive(Serialize)]
@@ -203,6 +214,41 @@ async fn backend_generate(
     backend_request(&runtime, &client, Method::POST, "/generate", Some(payload)).await
 }
 
+#[tauri::command]
+async fn backend_create_clone(
+    payload: CloneUploadPayload,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    let url = format!("{}/voices/clone", runtime.api_base);
+    let audio_part = multipart::Part::bytes(payload.audio_bytes).file_name(payload.filename);
+    let form = multipart::Form::new()
+        .text("name", payload.name)
+        .text("gender", payload.gender)
+        .text("transcript", payload.transcript)
+        .text("tags", payload.tags)
+        .part("audio", audio_part);
+
+    let mut request = client.client.post(url).multipart(form);
+    if let Some(token) = &runtime.api_token {
+        request = request.header("x-foundry-vox-token", token);
+    }
+
+    let response = request.send().await.map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        let fallback = format!("Backend request failed with {}", response.status());
+        let error = response
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|payload| payload.get("message").and_then(Value::as_str).map(str::to_string))
+            .unwrap_or(fallback);
+        return Err(error);
+    }
+
+    response.json::<Value>().await.map_err(|error| error.to_string())
+}
+
 fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
@@ -296,7 +342,8 @@ fn main() {
             backend_delete_voice,
             backend_delete_history_item,
             backend_clear_history,
-            backend_generate
+            backend_generate,
+            backend_create_clone
         ])
         .run(tauri::generate_context!())
         .expect("error while running Foundry Vox");

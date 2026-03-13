@@ -118,17 +118,24 @@ export const api = {
     invokeBackend<{ voices: Voice[] }>("backend_get_voices", { voiceType: type ?? null }),
   getVoice: (voiceId: string) => invokeBackend<{ voice: Voice }>("backend_get_voice", { voiceId }),
   createClone: async (formData: FormData) => {
-    await initRuntimeConfig();
-    const response = await fetch(`${runtimeConfig.apiBase}/voices/clone`, {
-      method: "POST",
-      body: formData,
-      headers: requestHeaders(),
-    });
-    if (!response.ok) {
-      const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
-      throw new Error(error?.message ?? "Failed to clone voice");
+    const audio = formData.get("audio");
+    if (!(audio instanceof File)) {
+      throw new Error("Reference audio is required.");
     }
-    return response.json() as Promise<{
+
+    const name = String(formData.get("name") ?? "").trim();
+    const transcript = String(formData.get("transcript") ?? "").trim();
+    const gender = String(formData.get("gender") ?? "");
+    const tags = String(formData.get("tags") ?? "[]");
+
+    if (!name) {
+      throw new Error("Clone name is required.");
+    }
+    if (!transcript) {
+      throw new Error("A matching transcript is required.");
+    }
+
+    return invokeBackend<{
       voice: Voice;
       quality: {
         duration_seconds: number;
@@ -136,7 +143,16 @@ export const api = {
         quality_rating: string;
         warnings: string[];
       };
-    }>;
+    }>("backend_create_clone", {
+      payload: {
+        name,
+        gender,
+        transcript,
+        tags,
+        filename: audio.name || "reference.wav",
+        audioBytes: Array.from(new Uint8Array(await audio.arrayBuffer())),
+      },
+    });
   },
   updateVoice: (voiceId: string, payload: Record<string, unknown>) =>
     invokeBackend<{ voice: Voice }>("backend_update_voice", { voiceId, payload }),
