@@ -204,7 +204,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    void refreshAll();
+    void api.init().then(refreshAll);
     const interval = window.setInterval(() => {
       void api
         .getHealth()
@@ -238,7 +238,7 @@ export default function App() {
 
     try {
       eventSourceRef.current?.close();
-      eventSourceRef.current = api.progressStream((event, type) => {
+      eventSourceRef.current = await api.progressStream((event, type) => {
         if (type === "complete") {
           setProgress({ status: "complete", percent: 100, generation_id: event.generation_id });
         } else if (type === "error") {
@@ -364,7 +364,7 @@ export default function App() {
   async function handleVoicePreview(voiceId: string) {
     setPreviewVoiceId(voiceId);
     try {
-      const preview = new Audio(`${api.baseUrl}/voices/${voiceId}/preview`);
+      const preview = new Audio(api.mediaUrl(`/voices/${voiceId}/preview`));
       preview.addEventListener("ended", () => setPreviewVoiceId((current) => (current === voiceId ? null : current)), {
         once: true,
       });
@@ -689,7 +689,7 @@ export default function App() {
                     <audio
                       className="audio-player"
                       controls
-                      src={`${api.baseUrl}/generate/${latestGeneration.id}/audio`}
+                      src={api.mediaUrl(`/generate/${latestGeneration.id}/audio`)}
                     />
                     <div className="metrics-grid">
                       <div>
@@ -1000,7 +1000,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="history-actions">
-                      <audio controls src={`${api.baseUrl}/generate/${entry.id}/audio`} />
+                      <audio controls src={api.mediaUrl(`/generate/${entry.id}/audio`)} />
                       <div className="button-row">
                         <button className="ghost-button compact" onClick={() => void handleSaveGeneration(entry)}>
                           Save

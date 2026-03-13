@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type {
   Generation,
   HealthResponse,
@@ -7,7 +8,10 @@ import type {
   Voice,
 } from "../types";
 
-const API_BASE = "http://127.0.0.1:3456/api/v1";
+interface RuntimeConfig {
+  apiBase: string;
+  apiToken: string | null;
+}
 
 interface ApiErrorShape {
   error: string;
@@ -15,10 +19,56 @@ interface ApiErrorShape {
   details?: Record<string, unknown>;
 }
 
+const DEFAULT_API_BASE = "http://127.0.0.1:3456/api/v1";
+
+let runtimeConfig: RuntimeConfig = {
+  apiBase: DEFAULT_API_BASE,
+  apiToken: null,
+};
+let runtimeConfigPromise: Promise<void> | null = null;
+
+async function initRuntimeConfig(): Promise<void> {
+  if (!runtimeConfigPromise) {
+    runtimeConfigPromise = (async () => {
+      try {
+        const config = await invoke<RuntimeConfig>("runtime_config");
+        runtimeConfig = {
+          apiBase: config.apiBase || DEFAULT_API_BASE,
+          apiToken: config.apiToken || null,
+        };
+      } catch {
+        runtimeConfig = {
+          apiBase: DEFAULT_API_BASE,
+          apiToken: null,
+        };
+      }
+    })();
+  }
+  await runtimeConfigPromise;
+}
+
+function withToken(path: string): string {
+  if (!runtimeConfig.apiToken) {
+    return `${runtimeConfig.apiBase}${path}`;
+  }
+  const separator = path.includes("?") ? "&" : "?";
+  return `${runtimeConfig.apiBase}${path}${separator}token=${encodeURIComponent(runtimeConfig.apiToken)}`;
+}
+
+function requestHeaders(init?: RequestInit): Headers {
+  const headers = new Headers(init?.headers ?? {});
+  if (runtimeConfig.apiToken) {
+    headers.set("x-foundry-vox-token", runtimeConfig.apiToken);
+  }
+  return headers;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  await initRuntimeConfig();
+  const response = await fetch(`${runtimeConfig.apiBase}${path}`, {
     cache: "no-store",
     ...init,
+    headers: requestHeaders(init),
   });
   if (!response.ok) {
     const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
@@ -28,9 +78,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function fetchBlob(path: string, init?: RequestInit): Promise<Blob> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  await initRuntimeConfig();
+  const response = await fetch(`${runtimeConfig.apiBase}${path}`, {
     cache: "no-store",
     ...init,
+    headers: requestHeaders(init),
   });
   if (!response.ok) {
     const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
@@ -40,15 +92,21 @@ async function fetchBlob(path: string, init?: RequestInit): Promise<Blob> {
 }
 
 export const api = {
-  baseUrl: API_BASE,
+  init: initRuntimeConfig,
+  get baseUrl() {
+    return runtimeConfig.apiBase;
+  },
+  mediaUrl: (path: string) => withToken(path),
   getHealth: () => request<HealthResponse>("/health"),
   getVoices: (type?: "preset" | "clone") =>
     request<{ voices: Voice[] }>(type ? `/voices?type=${type}` : "/voices"),
   getVoice: (voiceId: string) => request<{ voice: Voice }>(`/voices/${voiceId}`),
   createClone: async (formData: FormData) => {
-    const response = await fetch(`${API_BASE}/voices/clone`, {
+    await initRuntimeConfig();
+    const response = await fetch(`${runtimeConfig.apiBase}/voices/clone`, {
       method: "POST",
       body: formData,
+      headers: requestHeaders(),
     });
     if (!response.ok) {
       const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
@@ -97,9 +155,10 @@ export const api = {
     format: "wav" | "mp3" | "aac";
     pause_seconds?: number;
   }) => {
-    const response = await fetch(`${API_BASE}/export/batch`, {
+    await initRuntimeConfig();
+    const response = await fetch(`${runtimeConfig.apiBase}/export/batch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: requestHeaders({ headers: { "Content-Type": "application/json" } }),
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
@@ -108,8 +167,9 @@ export const api = {
     }
     return response.blob();
   },
-  progressStream: (onEvent: (event: ProgressEvent, type: string) => void) => {
-    const source = new EventSource(`${API_BASE}/generate/progress`);
+  progressStream: async (onEvent: (event: ProgressEvent, type: string) => void) => {
+    await initRuntimeConfig();
+    const source = new EventSource(withToken("/generate/progress"));
     source.addEventListener("progress", (event) => {
       onEvent(JSON.parse((event as MessageEvent).data), "progress");
     });

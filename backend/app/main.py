@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import wave
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from .audio import generate_placeholder_wav
 from .config import API_PREFIX, APP_NAME, DEFAULT_HOST, DEFAULT_PORT, get_app_paths
@@ -159,6 +160,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+API_TOKEN = os.getenv("FOUNDRY_VOX_API_TOKEN")
+
+
+@app.middleware("http")
+async def require_runtime_token(request: Request, call_next: object) -> Response:
+    if not API_TOKEN:
+        return await call_next(request)
+
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    path = request.url.path
+    if path.endswith("/health"):
+        return await call_next(request)
+
+    header_token = request.headers.get("x-foundry-vox-token")
+    query_token = request.query_params.get("token")
+    if header_token == API_TOKEN or query_token == API_TOKEN:
+        return await call_next(request)
+
+    return JSONResponse(
+        status_code=401,
+        content=error_payload(
+            "runtime_auth_required",
+            "This packaged build only accepts requests from the Foundry Vox app shell.",
+        ),
+    )
 
 
 @app.exception_handler(ApiError)
