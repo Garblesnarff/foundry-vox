@@ -24,6 +24,11 @@ interface HistoryResponse {
   total: number;
 }
 
+interface BinaryResponse {
+  fileName: string;
+  bytes: number[];
+}
+
 const DEFAULT_API_BASE = "http://127.0.0.1:3456/api/v1";
 
 let runtimeConfig: RuntimeConfig = {
@@ -80,20 +85,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(error?.message ?? `Request failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
-}
-
-async function fetchBlob(path: string, init?: RequestInit): Promise<Blob> {
-  await initRuntimeConfig();
-  const response = await fetch(`${runtimeConfig.apiBase}${path}`, {
-    cache: "no-store",
-    ...init,
-    headers: requestHeaders(init),
-  });
-  if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
-    throw new Error(error?.message ?? `Request failed with ${response.status}`);
-  }
-  return response.blob();
 }
 
 async function invokeBackend<T>(command: string, payload?: Record<string, unknown>): Promise<T> {
@@ -166,25 +157,14 @@ export const api = {
   clearHistory: () => invokeBackend<{ deleted: number }>("backend_clear_history"),
   getSettings: () => invokeBackend<Settings>("backend_get_settings"),
   patchSettings: (payload: Partial<Settings>) => invokeBackend<Settings>("backend_patch_settings", { payload }),
-  downloadGenerationAudio: (generationId: string) => fetchBlob(`/generate/${generationId}/download`),
-  exportBatch: async (payload: {
+  downloadGenerationAudio: (generationId: string) =>
+    invokeBackend<BinaryResponse>("backend_download_generation_audio", { generationId }),
+  exportBatch: (payload: {
     generation_ids: string[];
     mode: "zip" | "concatenate";
     format: "wav" | "mp3" | "aac";
     pause_seconds?: number;
-  }) => {
-    await initRuntimeConfig();
-    const response = await fetch(`${runtimeConfig.apiBase}/export/batch`, {
-      method: "POST",
-      headers: requestHeaders({ headers: { "Content-Type": "application/json" } }),
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      const error = (await response.json().catch(() => null)) as ApiErrorShape | null;
-      throw new Error(error?.message ?? "Failed to export batch");
-    }
-    return response.blob();
-  },
+  }) => invokeBackend<BinaryResponse>("backend_export_batch", { payload }),
   progressStream: async (onEvent: (event: ProgressEvent, type: string) => void) => {
     await initRuntimeConfig();
     const source = new EventSource(withToken("/generate/progress"));

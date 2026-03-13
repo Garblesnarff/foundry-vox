@@ -339,33 +339,29 @@ export default function App() {
 
   async function handleExportSelection(mode: "zip" | "concatenate") {
     if (historySelection.length === 0) return;
-    const blob = await api.exportBatch({
+    const file = await api.exportBatch({
       generation_ids: historySelection,
       mode,
       format: settings.output_format,
     });
-    const extension = mode === "zip" ? "zip" : settings.output_format;
     const destination = await save({
       title: mode === "zip" ? "Save export archive" : "Save stitched audio",
-      defaultPath: `foundry-vox-export.${extension}`,
+      defaultPath: file.fileName,
     });
     if (!destination) return;
 
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    await writeFile(destination, bytes);
+    await writeFile(destination, new Uint8Array(file.bytes));
   }
 
   async function handleSaveGeneration(entry: Generation) {
-    const timestamp = entry.created_at.replace(/:/g, "-").replace(/\.\d+Z$/, "Z");
     const destination = await save({
       title: "Save rendered audio",
-      defaultPath: `foundry-vox-${entry.voice_name.toLowerCase().replace(/\s+/g, "-")}-${timestamp}.${entry.format}`,
+      defaultPath: `foundry-vox-${entry.voice_name.toLowerCase().replace(/\s+/g, "-")}.${entry.format}`,
     });
     if (!destination) return;
 
-    const blob = await api.downloadGenerationAudio(entry.id);
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    await writeFile(destination, bytes);
+    const file = await api.downloadGenerationAudio(entry.id);
+    await writeFile(destination, new Uint8Array(file.bytes));
   }
 
   async function handleVoicePreview(voiceId: string) {

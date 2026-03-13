@@ -2,7 +2,7 @@
 
 use reqwest::{multipart, Method};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::net::TcpListener;
 use tauri::{Emitter, Manager, State};
@@ -20,7 +20,7 @@ struct BackendClient {
     client: reqwest::Client,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CloneUploadPayload {
     name: String,
@@ -29,6 +29,22 @@ struct CloneUploadPayload {
     tags: String,
     filename: String,
     audio_bytes: Vec<u8>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportBatchPayload {
+    generation_ids: Vec<String>,
+    mode: String,
+    format: String,
+    pause_seconds: Option<f64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BinaryResponse {
+    file_name: String,
+    bytes: Vec<u8>,
 }
 
 #[derive(Serialize)]
@@ -77,6 +93,49 @@ async fn backend_request<T: DeserializeOwned>(
     }
 
     response.json::<T>().await.map_err(|error| error.to_string())
+}
+
+async fn backend_request_bytes(
+    runtime: &RuntimeState,
+    client: &BackendClient,
+    method: Method,
+    path: &str,
+    body: Option<Value>,
+) -> Result<BinaryResponse, String> {
+    let url = format!("{}{}", runtime.api_base, path);
+    let mut request = client.client.request(method, &url);
+
+    if let Some(token) = &runtime.api_token {
+        request = request.header("x-foundry-vox-token", token);
+    }
+
+    if let Some(payload) = body {
+        request = request.json(&payload);
+    }
+
+    let response = request.send().await.map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        let fallback = format!("Backend request failed with {}", response.status());
+        let error = response
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|payload| payload.get("message").and_then(Value::as_str).map(str::to_string))
+            .unwrap_or(fallback);
+        return Err(error);
+    }
+
+    let file_name = response
+        .headers()
+        .get(reqwest::header::CONTENT_DISPOSITION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split("filename=\"").nth(1))
+        .and_then(|value| value.split('"').next())
+        .unwrap_or("foundry-vox-output.bin")
+        .to_string();
+
+    let bytes = response.bytes().await.map_err(|error| error.to_string())?.to_vec();
+    Ok(BinaryResponse { file_name, bytes })
 }
 
 #[tauri::command]
@@ -249,6 +308,37 @@ async fn backend_create_clone(
     response.json::<Value>().await.map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn backend_download_generation_audio(
+    generation_id: String,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<BinaryResponse, String> {
+    backend_request_bytes(
+        &runtime,
+        &client,
+        Method::GET,
+        &format!("/generate/{generation_id}/download"),
+        None,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn backend_export_batch(
+    payload: ExportBatchPayload,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<BinaryResponse, String> {
+    let body = serde_json::json!({
+        "generation_ids": payload.generation_ids,
+        "mode": payload.mode,
+        "format": payload.format,
+        "pause_seconds": payload.pause_seconds.unwrap_or(0.5),
+    });
+    backend_request_bytes(&runtime, &client, Method::POST, "/export/batch", Some(body)).await
+}
+
 fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let port = listener.local_addr()?.port();
@@ -343,7 +433,9 @@ fn main() {
             backend_delete_history_item,
             backend_clear_history,
             backend_generate,
-            backend_create_clone
+            backend_create_clone,
+            backend_download_generation_audio,
+            backend_export_batch
         ])
         .run(tauri::generate_context!())
         .expect("error while running Foundry Vox");
