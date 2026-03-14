@@ -1,7 +1,7 @@
 """Hybrid MLX/PyTorch inference for TADA-1B.
 
-Uses MLX for the autoregressive LLM loop (Metal GPU) and PyTorch for
-encoder/decoder (run once each, not the bottleneck).
+Uses MLX for the autoregressive LLM loop (Metal GPU) and optionally
+MLX for the decoder too. PyTorch encoder runs once (not the bottleneck).
 """
 
 from __future__ import annotations
@@ -58,6 +58,7 @@ class MLXInferenceCore:
         self,
         weights_dir: str | Path,
         quantize_llm: bool = True,
+        use_mlx_decoder: bool = True,
     ) -> None:
         weights_dir = Path(weights_dir)
 
@@ -79,6 +80,21 @@ class MLXInferenceCore:
 
         mx.eval(self.model.parameters())
         logger.info("MLX model loaded in %.1fs", time.time() - t0)
+
+        # Load MLX decoder if available
+        self.mlx_decoder = None
+        if use_mlx_decoder:
+            decoder_weights_path = weights_dir / "decoder_weights.safetensors"
+            if decoder_weights_path.exists():
+                t0 = time.time()
+                from .decoder import DecoderMLX
+                self.mlx_decoder = DecoderMLX()
+                dec_weights = mx.load(str(decoder_weights_path))
+                self.mlx_decoder.load_weights(list(dec_weights.items()))
+                mx.eval(self.mlx_decoder.parameters())
+                logger.info("MLX decoder loaded in %.1fs", time.time() - t0)
+            else:
+                logger.info("MLX decoder weights not found, will use PyTorch decoder")
 
         # Cache tokenizer info (set by TadaEngine after encoder is loaded)
         self.tokenizer: Any = None
@@ -116,7 +132,7 @@ class MLXInferenceCore:
             num_transition_steps: Transition steps for voice blending
             system_prompt: Optional system prompt for emotion/style
             config: Generation config
-            decoder: PyTorch TADA decoder for audio synthesis
+            decoder: PyTorch TADA decoder for audio synthesis (fallback if no MLX decoder)
             device: PyTorch device for decoder
             dtype: PyTorch dtype for decoder
 
@@ -227,37 +243,93 @@ class MLXInferenceCore:
         )
         gen_time = time.time() - t0
 
-        # Convert back to PyTorch for decoding
         num_prompt_tokens = prompt_acoustic_features.shape[1]
-        acoustic_features_pt = mlx_to_torch(output.acoustic_features, dtype=dtype)
-
-        # Denormalize
-        acoustic_features_pt = acoustic_features_pt * self.config.acoustic_std + self.config.acoustic_mean
-
-        time_before_pt = mlx_to_torch(output.time_before, dtype=torch.long)
-
-        # Trim to generated portion (skip prompt and transition)
         start_idx = num_prompt_tokens + num_transition_steps - 1
-        encoded = acoustic_features_pt[:, start_idx:]
-        time_before = time_before_pt[:, start_idx:]
 
-        if encoded.shape[1] == 0:
-            return None, gen_time
-
-        # Decode using PyTorch decoder
-        if decoder is not None:
-            t_dec = time.time()
-            wav = self._decode_wav(decoder, encoded[0], time_before[0], device=device, dtype=dtype)
-            logger.info("Decode: %.1fs", time.time() - t_dec)
+        # Choose decode path
+        if self.mlx_decoder is not None:
+            wav = self._decode_mlx(output, start_idx)
+        elif decoder is not None:
+            wav = self._decode_pytorch(output, start_idx, decoder, device, dtype)
         else:
             wav = None
 
         if wav is not None:
             # Remove leading silence
-            leading_silence_samples = int(24000 * time_before[0][0].item() / 50)
+            time_before_val = int(np.array(output.time_before[0, start_idx]).item())
+            leading_silence_samples = int(24000 * time_before_val / 50)
             wav = wav[..., leading_silence_samples:]
 
         return wav, gen_time
+
+    def _decode_mlx(self, output: Any, start_idx: int) -> Any:
+        """Decode using MLX decoder (fully on Metal GPU)."""
+        import torch
+
+        t_dec = time.time()
+
+        acoustic_features = output.acoustic_features[:, start_idx:]
+        time_before = output.time_before[:, start_idx:]
+
+        # Denormalize
+        acoustic_features = acoustic_features * self.config.acoustic_std + self.config.acoustic_mean
+
+        if acoustic_features.shape[1] == 0:
+            return None
+
+        # Expand features using time_before
+        encoded = acoustic_features[0]  # (T, 512)
+        tb = time_before[0]  # (T,)
+
+        parts = []
+        for pos in range(encoded.shape[0]):
+            n_frames = max(0, int(tb[pos].item()) - 1)
+            if n_frames > 0:
+                parts.append(mx.zeros((n_frames, encoded.shape[-1])))
+            parts.append(encoded[pos:pos+1])
+
+        if tb.shape[0] > encoded.shape[0]:
+            n_trailing = int(tb[-1].item())
+            if n_trailing > 0:
+                parts.append(mx.zeros((n_trailing, encoded.shape[-1])))
+
+        if not parts:
+            return None
+
+        encoded_expanded = mx.concatenate(parts, axis=0)[None]
+        token_masks = (mx.sqrt((encoded_expanded * encoded_expanded).sum(axis=-1)) != 0).astype(mx.int32)
+
+        wav = self.mlx_decoder.generate(encoded_expanded, token_masks)
+        mx.eval(wav)
+
+        logger.info("MLX decode: %.1fs", time.time() - t_dec)
+
+        # Convert to PyTorch tensor for compatibility with TadaEngine
+        wav_np = np.array(wav.squeeze())
+        return torch.from_numpy(wav_np)
+
+    def _decode_pytorch(
+        self, output: Any, start_idx: int,
+        decoder: Any, device: str, dtype: Any,
+    ) -> Any:
+        """Decode using PyTorch decoder (CPU fallback)."""
+        import torch
+
+        t_dec = time.time()
+
+        acoustic_features_pt = mlx_to_torch(output.acoustic_features, dtype=dtype)
+        acoustic_features_pt = acoustic_features_pt * self.config.acoustic_std + self.config.acoustic_mean
+        time_before_pt = mlx_to_torch(output.time_before, dtype=torch.long)
+
+        encoded = acoustic_features_pt[:, start_idx:]
+        time_before = time_before_pt[:, start_idx:]
+
+        if encoded.shape[1] == 0:
+            return None
+
+        wav = self._decode_wav(decoder, encoded[0], time_before[0], device=device, dtype=dtype)
+        logger.info("PyTorch decode: %.1fs", time.time() - t_dec)
+        return wav
 
     @staticmethod
     def _decode_wav(
@@ -303,7 +375,7 @@ class MLXInferenceCore:
     def warmup(
         self,
         prompt: Any,
-        decoder: Any,
+        decoder: Any = None,
         config: GenerateConfig | None = None,
         device: str = "cpu",
         dtype: Any = None,

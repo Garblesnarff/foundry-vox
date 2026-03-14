@@ -196,14 +196,20 @@ class TadaEngine:
 
         weights_dir = self._mlx_weights_dir()
         weights_path = weights_dir / "weights.safetensors"
+        decoder_weights_path = weights_dir / "decoder_weights.safetensors"
         config_path = weights_dir / "config.json"
 
-        if weights_path.exists() and config_path.exists():
+        if weights_path.exists() and decoder_weights_path.exists() and config_path.exists():
             return True
 
         logger.info("Converting TADA weights to MLX format...")
         try:
-            from .mlx_tada.convert_weights import load_pytorch_weights, map_llama_weights
+            from .mlx_tada.convert_weights import (
+                load_decoder_weights,
+                load_pytorch_weights,
+                map_decoder_weights,
+                map_llama_weights,
+            )
 
             import mlx.core as mx
             import json
@@ -213,9 +219,12 @@ class TadaEngine:
                 models_dir=str(self.models_dir),
             )
             mlx_weights = map_llama_weights(pt_weights)
+            decoder_pt_weights = load_decoder_weights(models_dir=str(self.models_dir))
+            mlx_decoder_weights = map_decoder_weights(decoder_pt_weights)
 
             weights_dir.mkdir(parents=True, exist_ok=True)
             mx.save_safetensors(str(weights_path), mlx_weights)
+            mx.save_safetensors(str(decoder_weights_path), mlx_decoder_weights)
 
             config = {
                 "hidden_size": 2048,
@@ -315,19 +324,23 @@ class TadaEngine:
         self._use_mlx = self._try_load_mlx()
 
         if self._use_mlx:
-            # MLX needs the tokenizer and decoder from PyTorch
+            # MLX needs the tokenizer from PyTorch encoder
             self._mlx_core.set_tokenizer(self.encoder.tokenizer)
 
-            # Load decoder for MLX path (runs once per generation, not the bottleneck)
-            from tada.modules.decoder import Decoder  # type: ignore
+            # Only load PyTorch decoder if MLX decoder is not available
+            if self._mlx_core.mlx_decoder is None:
+                from tada.modules.decoder import Decoder  # type: ignore
 
-            self._decoder = self._load_pretrained_local_first(
-                Decoder, "HumeAI/tada-codec", subfolder="decoder"
-            ).to(self.device)
-            self._decoder.eval()
+                self._decoder = self._load_pretrained_local_first(
+                    Decoder, "HumeAI/tada-codec", subfolder="decoder"
+                ).to(self.device)
+                self._decoder.eval()
+                logger.info("Using MLX backend with PyTorch decoder fallback")
+            else:
+                logger.info("Using full MLX backend (LLM + decoder on Metal GPU)")
+
             self.device = "apple-metal"
             self.dtype = "int4+fp32-hybrid"
-            logger.info("Using MLX backend (Metal GPU acceleration)")
         else:
             # Fall back to PyTorch-only path
             self.model = self._load_pretrained_local_first(

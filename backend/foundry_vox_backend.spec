@@ -17,6 +17,7 @@ a = Analysis(
     hiddenimports=[
         "app.mlx_tada",
         "app.mlx_tada.convert_weights",
+        "app.mlx_tada.decoder",
         "app.mlx_tada.diffusion",
         "app.mlx_tada.generate",
         "app.mlx_tada.hybrid",
