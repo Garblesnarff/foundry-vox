@@ -164,21 +164,22 @@ class TadaEngine:
         )
 
     def _mlx_generate_config(self) -> Any:
-        """Build MLX GenerateConfig with optimized settings (5 flow steps)."""
+        """Build MLX GenerateConfig with optimized settings (2 flow steps, CFG 2.0)."""
         from .mlx_tada.generate import GenerateConfig
 
         return GenerateConfig(
-            text_do_sample=True,
+            text_do_sample=False,
             text_temperature=0.6,
             text_top_k=0,
             text_top_p=0.9,
-            acoustic_cfg_scale=1.6,
+            acoustic_cfg_scale=2.0,
             duration_cfg_scale=1.0,
             cfg_schedule="constant",
-            noise_temperature=0.9,
-            num_flow_matching_steps=5,
+            noise_temperature=0.6,
+            num_flow_matching_steps=2,
             time_schedule="logsnr",
             num_acoustic_candidates=1,
+            negative_condition_source="negative_step_output",
         )
 
     def _mlx_weights_dir(self) -> Path:
