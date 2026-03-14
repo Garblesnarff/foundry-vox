@@ -27,18 +27,19 @@ def convert_torch_to_mlx(tensor_pt, dtype=mx.bfloat16):
     return mx.array(tensor_np).astype(dtype)
 
 
-def load_pytorch_weights(models_dir: str | None = None):
+def load_pytorch_weights(repo_id: str = "HumeAI/tada-1b", models_dir: str | None = None):
     """Load weights from safetensors using PyTorch framework.
 
     Searches both the default HuggingFace cache and an optional custom models directory.
     """
     from safetensors import safe_open
 
+    repo_cache_name = repo_id.replace("/", "--")
     search_patterns = [
-        os.path.expanduser("~/.cache/huggingface/hub/models--HumeAI--tada-1b/snapshots/*/model.safetensors"),
+        os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo_cache_name}/snapshots/*/model.safetensors"),
     ]
     if models_dir:
-        search_patterns.insert(0, os.path.join(models_dir, "models--HumeAI--tada-1b/snapshots/*/model.safetensors"))
+        search_patterns.insert(0, os.path.join(models_dir, f"models--{repo_cache_name}/snapshots/*/model.safetensors"))
 
     paths = []
     for pattern in search_patterns:

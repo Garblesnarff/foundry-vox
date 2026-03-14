@@ -16,7 +16,7 @@ fi
 
 EXTRAS="--extra build"
 if [ "${FOUNDRY_VOX_INCLUDE_ML:-1}" = "1" ]; then
-  EXTRAS="$EXTRAS --extra ml"
+  EXTRAS="$EXTRAS --extra ml --extra mlx"
 fi
 
 uv sync --project backend $EXTRAS >/dev/null

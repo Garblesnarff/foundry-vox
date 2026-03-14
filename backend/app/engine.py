@@ -52,6 +52,8 @@ class TadaEngine:
     def configure(self, *, model_name: str, num_threads: int) -> None:
         self.model_name = model_name
         self.num_threads = num_threads
+        self.device = "cpu"
+        self.dtype = "float32"
         self.warmed_up = False
         self.model_loaded = False
         self.encoder = None
@@ -181,13 +183,17 @@ class TadaEngine:
 
     def _mlx_weights_dir(self) -> Path:
         """Directory for converted MLX weights."""
-        return self.models_dir / "mlx-tada-weights"
+        return self.models_dir / f"mlx-{self.model_name}-weights"
 
     def _convert_weights_if_needed(self) -> bool:
         """Convert PyTorch TADA weights to MLX format if not already done.
 
         Returns True if weights are available (converted or already exist).
         """
+        if self.model_name != "tada-1b":
+            logger.info("MLX conversion is currently only supported for tada-1b; using PyTorch for %s", self.model_name)
+            return False
+
         weights_dir = self._mlx_weights_dir()
         weights_path = weights_dir / "weights.safetensors"
         config_path = weights_dir / "config.json"
@@ -202,7 +208,10 @@ class TadaEngine:
             import mlx.core as mx
             import json
 
-            pt_weights = load_pytorch_weights(models_dir=str(self.models_dir))
+            pt_weights = load_pytorch_weights(
+                repo_id=f"HumeAI/{self.model_name}",
+                models_dir=str(self.models_dir),
+            )
             mlx_weights = map_llama_weights(pt_weights)
 
             weights_dir.mkdir(parents=True, exist_ok=True)
@@ -316,6 +325,8 @@ class TadaEngine:
                 Decoder, "HumeAI/tada-codec", subfolder="decoder"
             ).to(self.device)
             self._decoder.eval()
+            self.device = "apple-metal"
+            self.dtype = "int4+fp32-hybrid"
             logger.info("Using MLX backend (Metal GPU acceleration)")
         else:
             # Fall back to PyTorch-only path
@@ -323,6 +334,8 @@ class TadaEngine:
                 TadaForCausalLM, f"HumeAI/{self.model_name}"
             ).to(self.device)
             self.model.eval()
+            self.device = "cpu"
+            self.dtype = "float32"
             logger.info("Using PyTorch backend (CPU)")
 
     def _encode_reference_sync(self, audio_path: Path, transcript: str | None) -> Any:
@@ -539,6 +552,8 @@ class TadaEngine:
         self._decoder = None
         self._mlx_core = None
         self._use_mlx = False
+        self.device = "cpu"
+        self.dtype = "float32"
         self.model_loaded = False
         self.warmed_up = False
         with contextlib.suppress(Exception):
