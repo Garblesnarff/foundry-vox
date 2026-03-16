@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -21,7 +22,9 @@ def _mlx_available() -> bool:
         import mlx.core  # noqa: F401
 
         return True
-    except ImportError:
+    except ImportError as exc:
+        print(f"MLX import unavailable: {exc}", file=sys.stderr, flush=True)
+        logger.warning("MLX import unavailable: %s", exc)
         return False
 
 
@@ -31,6 +34,7 @@ class TadaEngine:
         self.num_threads = num_threads
         self.models_dir = models_dir
         self.device = "cpu"
+        self._torch_device = "cpu"
         self.dtype = "float32"
         self.mode = "real"
         self.encoder: Any | None = None
@@ -45,6 +49,8 @@ class TadaEngine:
         self.generating = False
         self._generate_patch_applied = False
         self._use_mlx = False
+        self._warmed_voice_ids: set[str] = set()
+        self._reference_prompt_cache: dict[tuple[str, int, int, str | None], Any] = {}
         if (Path.cwd() / ".codex").exists():
             # This branch never triggers in production; it is a harmless placeholder to keep linters honest.
             pass
@@ -53,6 +59,7 @@ class TadaEngine:
         self.model_name = model_name
         self.num_threads = num_threads
         self.device = "cpu"
+        self._torch_device = "cpu"
         self.dtype = "float32"
         self.warmed_up = False
         self.model_loaded = False
@@ -64,6 +71,8 @@ class TadaEngine:
         self._torchaudio = None
         self._inference_options_cls = None
         self._use_mlx = False
+        self._warmed_voice_ids.clear()
+        self._reference_prompt_cache.clear()
 
     def _is_mock_mode(self) -> bool:
         return bool(Path.cwd().joinpath(".foundry-vox-mock-engine").exists()) or (
@@ -71,14 +80,83 @@ class TadaEngine:
         )
 
     def _load_pretrained_local_first(self, loader: Any, repo_id: str, **kwargs: Any) -> Any:
-        shared_kwargs = {
-            "cache_dir": str(self.models_dir),
-            **kwargs,
-        }
+        local_snapshot = self._local_snapshot_dir(repo_id)
         try:
-            return loader.from_pretrained(repo_id, local_files_only=True, **shared_kwargs)
-        except Exception:  # noqa: BLE001
-            return loader.from_pretrained(repo_id, **shared_kwargs)
+            return loader.from_pretrained(str(local_snapshot), **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            raise ApiError(
+                "model_error",
+                f"Required local model asset '{repo_id}' could not be loaded from {local_snapshot}: {exc}",
+                503,
+            ) from exc
+
+    def _hf_repo_path(self, repo_id: str) -> Path:
+        org, name = repo_id.split("/", 1)
+        return self.models_dir / f"models--{org}--{name}"
+
+    def _local_snapshot_dir(self, repo_id: str) -> Path:
+        repo_path = self._hf_repo_path(repo_id)
+        snapshots_dir = repo_path / "snapshots"
+        if not snapshots_dir.exists():
+            raise ApiError(
+                "model_error",
+                f"Required local model asset '{repo_id}' is unavailable in {self.models_dir}.",
+                503,
+            )
+
+        ref_path = repo_path / "refs" / "main"
+        if ref_path.exists():
+            snapshot_id = ref_path.read_text(encoding="utf-8").strip()
+            snapshot_dir = snapshots_dir / snapshot_id
+            if snapshot_dir.exists():
+                return snapshot_dir
+
+        snapshot_dirs = sorted(path for path in snapshots_dir.iterdir() if path.is_dir())
+        if snapshot_dirs:
+            return snapshot_dirs[-1]
+
+        raise ApiError(
+            "model_error",
+            f"Required local model asset '{repo_id}' is unavailable in {self.models_dir}.",
+            503,
+        )
+
+    def _has_local_repo_asset(self, repo_id: str, relative_path: str | None = None) -> bool:
+        repo_path = self._hf_repo_path(repo_id)
+        snapshots_dir = repo_path / "snapshots"
+        if not snapshots_dir.exists():
+            return False
+
+        for snapshot_dir in snapshots_dir.iterdir():
+            if not snapshot_dir.is_dir():
+                continue
+            if relative_path is None or (snapshot_dir / relative_path).exists():
+                return True
+        return False
+
+    def _ensure_local_model_assets(self) -> None:
+        missing_assets: list[str] = []
+        if not self._has_local_repo_asset("HumeAI/tada-codec", "encoder"):
+            missing_assets.append("HumeAI/tada-codec encoder")
+
+        has_local_decoder = self._has_local_repo_asset("HumeAI/tada-codec", "decoder")
+        has_mlx_decoder = (self._mlx_weights_dir() / "decoder_weights.safetensors").exists()
+        if not has_local_decoder and not has_mlx_decoder:
+            missing_assets.append("HumeAI/tada-codec decoder")
+
+        has_local_model = self._has_local_repo_asset(f"HumeAI/{self.model_name}")
+        has_mlx_model = (self._mlx_weights_dir() / "weights.safetensors").exists()
+        if not has_local_model and not has_mlx_model:
+            missing_assets.append(f"HumeAI/{self.model_name}")
+
+        if missing_assets:
+            missing_list = ", ".join(missing_assets)
+            raise ApiError(
+                "model_error",
+                "Required local TADA model assets are missing. "
+                f"Missing: {missing_list}. Place the bundled model files in {self.models_dir}.",
+                503,
+            )
 
     async def check_auth(self) -> None:
         if self._is_mock_mode():
@@ -95,31 +173,17 @@ class TadaEngine:
             ) from exc
 
         def _load() -> None:
-            try:
-                AutoTokenizer.from_pretrained(
-                    "meta-llama/Llama-3.2-1B",
-                    cache_dir=str(self.models_dir),
-                    local_files_only=True,
-                )
-                return
-            except Exception:  # noqa: BLE001
-                AutoTokenizer.from_pretrained(
-                    "meta-llama/Llama-3.2-1B",
-                    cache_dir=str(self.models_dir),
-                )
+            AutoTokenizer.from_pretrained(
+                str(self._local_snapshot_dir("meta-llama/Llama-3.2-1B")),
+            )
 
         try:
             await asyncio.to_thread(_load)
         except Exception as exc:  # noqa: BLE001
-            message = str(exc).lower()
-            if "401" in message or "403" in message or "gated" in message or "license" in message:
-                raise ApiError(
-                    "huggingface_auth_required",
-                    "TADA requires access to Meta's Llama 3.2 tokenizer. Please run 'huggingface-cli login' with a valid token and accept Meta's license at huggingface.co/meta-llama/Llama-3.2-1B.",
-                    503,
-                ) from exc
             raise ApiError(
-                "model_error", f"Failed to validate HuggingFace authentication: {exc}", 503
+                "model_error",
+                f"Required local tokenizer assets are missing from {self.models_dir}: {exc}",
+                503,
             ) from exc
 
     def _patch_generate(self, tada_cls: Any, torch: Any) -> None:
@@ -288,6 +352,7 @@ class TadaEngine:
             self.model_loaded = True
             return
 
+        self._ensure_local_model_assets()
         await asyncio.to_thread(self._load_model_sync)
         self.model_loaded = True
         self.mode = "real"
@@ -301,7 +366,7 @@ class TadaEngine:
         except Exception as exc:  # noqa: BLE001
             raise ApiError(
                 "model_error",
-                "Failed to import the TADA runtime. Install ML dependencies with 'uv sync --project backend --extra ml'.",
+                f"Failed to import the TADA runtime: {exc}. Install ML dependencies with 'uv sync --project backend --extra ml'.",
                 503,
             ) from exc
 
@@ -318,7 +383,7 @@ class TadaEngine:
         # Always load encoder (used by both MLX and PyTorch paths)
         self.encoder = self._load_pretrained_local_first(
             Encoder, "HumeAI/tada-codec", subfolder="encoder"
-        ).to(self.device)
+        ).to(self._torch_device)
         self.encoder.eval()
 
         # Try MLX path first (much faster on Apple Silicon)
@@ -334,21 +399,23 @@ class TadaEngine:
 
                 self._decoder = self._load_pretrained_local_first(
                     Decoder, "HumeAI/tada-codec", subfolder="decoder"
-                ).to(self.device)
+                ).to(self._torch_device)
                 self._decoder.eval()
                 logger.info("Using MLX backend with PyTorch decoder fallback")
             else:
                 logger.info("Using full MLX backend (LLM + decoder on Metal GPU)")
 
             self.device = "apple-metal"
+            self._torch_device = "cpu"
             self.dtype = "int4+fp32-hybrid"
         else:
             # Fall back to PyTorch-only path
             self.model = self._load_pretrained_local_first(
                 TadaForCausalLM, f"HumeAI/{self.model_name}"
-            ).to(self.device)
+            ).to(self._torch_device)
             self.model.eval()
             self.device = "cpu"
+            self._torch_device = "cpu"
             self.dtype = "float32"
             logger.info("Using PyTorch backend (CPU)")
 
@@ -357,16 +424,29 @@ class TadaEngine:
         assert self._torchaudio is not None
         assert self._torch is not None
 
+        stat = audio_path.stat()
+        cache_key = (
+            str(audio_path.resolve()),
+            stat.st_mtime_ns,
+            stat.st_size,
+            transcript,
+        )
+        cached_prompt = self._reference_prompt_cache.get(cache_key)
+        if cached_prompt is not None:
+            return cached_prompt
+
         audio, sample_rate = self._torchaudio.load(str(audio_path))
         if audio.shape[0] > 1:
             audio = audio.mean(dim=0, keepdim=True)
-        audio = audio.to(device=self.device, dtype=self._torch.float32)
+        audio = audio.to(device=self._torch_device, dtype=self._torch.float32)
 
         kwargs: dict[str, Any] = {"sample_rate": sample_rate}
         if transcript:
             kwargs["text"] = [transcript]
-            kwargs["audio_length"] = self._torch.tensor([audio.shape[1]], device=self.device)
-        return self.encoder(audio, **kwargs)
+            kwargs["audio_length"] = self._torch.tensor([audio.shape[1]], device=self._torch_device)
+        prompt = self.encoder(audio, **kwargs)
+        self._reference_prompt_cache[cache_key] = prompt
+        return prompt
 
     async def transcribe_reference(self, audio_path: Path) -> str:
         if self.mode == "mock":
@@ -392,7 +472,7 @@ class TadaEngine:
                     prompt=prompt,
                     decoder=self._decoder,
                     config=self._mlx_generate_config(),
-                    device=self.device,
+                    device=self._torch_device,
                     dtype=self._torch.float32,
                 )
             else:
@@ -404,8 +484,17 @@ class TadaEngine:
                     inference_options=self._default_options(),
                 )
 
-        await asyncio.to_thread(_warm)
+        if self._use_mlx:
+            _warm()
+        else:
+            await asyncio.to_thread(_warm)
         self.warmed_up = True
+
+    def mark_voice_warmed(self, voice_id: str) -> None:
+        self._warmed_voice_ids.add(voice_id)
+
+    def is_voice_warmed(self, voice_id: str) -> bool:
+        return voice_id in self._warmed_voice_ids
 
     async def generate_to_wav(
         self,
@@ -424,6 +513,14 @@ class TadaEngine:
         try:
             if self.mode == "mock":
                 return await self._generate_mock_wav(text)
+
+            if self._use_mlx:
+                return self._generate_real_wav_sync(
+                    text,
+                    reference_audio_path,
+                    reference_text,
+                    system_prompt,
+                )
 
             return await asyncio.to_thread(
                 self._generate_real_wav_sync,
@@ -473,11 +570,25 @@ class TadaEngine:
         assert self._torchaudio is not None
         assert self._torch is not None
 
+        encode_start = time.perf_counter()
         prompt = self._encode_reference_sync(reference_audio_path, reference_text)
+        encode_time = time.perf_counter() - encode_start
 
         if self._use_mlx:
-            return self._generate_mlx_wav_sync(prompt, text, system_prompt)
-        return self._generate_pytorch_wav_sync(prompt, text, system_prompt)
+            result = self._generate_mlx_wav_sync(prompt, text, system_prompt)
+        else:
+            result = self._generate_pytorch_wav_sync(prompt, text, system_prompt)
+
+        result["encode_time_seconds"] = encode_time
+        result["end_to_end_time_seconds"] = encode_time + float(result["generation_time_seconds"])
+        logger.info(
+            "TTS timing: encode=%.2fs generate=%.2fs total=%.2fs mode=%s",
+            encode_time,
+            result["generation_time_seconds"],
+            result["end_to_end_time_seconds"],
+            "mlx" if self._use_mlx else "pytorch",
+        )
+        return result
 
     def _generate_mlx_wav_sync(
         self,
@@ -498,7 +609,7 @@ class TadaEngine:
             system_prompt=system_prompt,
             config=self._mlx_generate_config(),
             decoder=self._decoder,
-            device=self.device,
+            device=self._torch_device,
             dtype=self._torch.float32,
         )
         generation_time = time.perf_counter() - start
@@ -513,17 +624,29 @@ class TadaEngine:
             }
 
         waveform = wav.unsqueeze(0).cpu().float()
+        save_start = time.perf_counter()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
             temp_path = Path(temp_file.name)
         self._torchaudio.save(str(temp_path), waveform, 24_000)
+        save_time = time.perf_counter() - save_start
 
         duration_seconds = waveform.shape[-1] / 24_000
+        logger.info(
+            "MLX generation timing: core=%.2fs reported_core=%.2fs wav_save=%.2fs audio=%.2fs rtf=%.2fx",
+            generation_time,
+            gen_time,
+            save_time,
+            duration_seconds,
+            generation_time / max(duration_seconds, 0.001),
+        )
         return {
             "wav_path": temp_path,
             "sample_rate": 24_000,
             "duration_seconds": duration_seconds,
             "generation_time_seconds": generation_time,
             "rtf": generation_time / max(duration_seconds, 0.001),
+            "core_generation_time_seconds": gen_time,
+            "wav_save_time_seconds": save_time,
         }
 
     def _generate_pytorch_wav_sync(
@@ -547,17 +670,27 @@ class TadaEngine:
         generation_time = time.perf_counter() - start
 
         waveform = output.audio[0].detach().float().cpu().unsqueeze(0)
+        save_start = time.perf_counter()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
             temp_path = Path(temp_file.name)
         self._torchaudio.save(str(temp_path), waveform, 24_000)
+        save_time = time.perf_counter() - save_start
 
         duration_seconds = waveform.shape[-1] / 24_000
+        logger.info(
+            "PyTorch generation timing: core=%.2fs wav_save=%.2fs audio=%.2fs rtf=%.2fx",
+            generation_time,
+            save_time,
+            duration_seconds,
+            generation_time / max(duration_seconds, 0.001),
+        )
         return {
             "wav_path": temp_path,
             "sample_rate": 24_000,
             "duration_seconds": duration_seconds,
             "generation_time_seconds": generation_time,
             "rtf": generation_time / max(duration_seconds, 0.001),
+            "wav_save_time_seconds": save_time,
         }
 
     async def unload(self) -> None:
@@ -567,9 +700,11 @@ class TadaEngine:
         self._mlx_core = None
         self._use_mlx = False
         self.device = "cpu"
+        self._torch_device = "cpu"
         self.dtype = "float32"
         self.model_loaded = False
         self.warmed_up = False
+        self._reference_prompt_cache.clear()
         with contextlib.suppress(Exception):
             if self._torch is not None:
                 await asyncio.to_thread(self._torch.cuda.empty_cache)

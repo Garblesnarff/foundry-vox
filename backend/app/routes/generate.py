@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import logging
 import uuid
 from contextlib import suppress
 from pathlib import Path
@@ -17,6 +18,7 @@ from ..models import GenerationRequest, GenerationResponse, ProgressEvent
 from ..services import utc_now
 
 router = APIRouter(tags=["generation"])
+logger = logging.getLogger(__name__)
 
 
 async def _progress_estimator(
@@ -90,6 +92,7 @@ async def generate_speech(request: Request, payload: GenerationRequest) -> Gener
                 reference_text=voice.reference_text,
                 system_prompt=payload.system_prompt,
             )
+            services.engine.mark_voice_warmed(voice.id)
             await services.progress.publish("progress", ProgressEvent(status="decoding", percent=90))
 
             audio = AudioSegment.from_wav(result["wav_path"]).set_frame_rate(sample_rate)
@@ -97,7 +100,19 @@ async def generate_speech(request: Request, payload: GenerationRequest) -> Gener
 
             generation_id = str(uuid.uuid4())
             output_path = output_dir / f"{generation_id}.{output_format}"
+            export_start = asyncio.get_running_loop().time()
             export_audio(audio, output_path, output_format, bit_depth)
+            export_time = asyncio.get_running_loop().time() - export_start
+            logger.info(
+                "App generation timing: encode=%.2fs core=%.2fs save_wav=%.2fs export=%.2fs total=%.2fs final_audio=%.2fs final_rtf=%.2fx",
+                float(result.get("encode_time_seconds", 0.0)),
+                float(result.get("core_generation_time_seconds", result["generation_time_seconds"])),
+                float(result.get("wav_save_time_seconds", 0.0)),
+                export_time,
+                float(result.get("end_to_end_time_seconds", result["generation_time_seconds"])) + export_time,
+                len(audio) / 1000,
+                result["generation_time_seconds"] / max(len(audio) / 1000, 0.001),
+            )
 
             generation = await services.db.insert_generation(
                 {

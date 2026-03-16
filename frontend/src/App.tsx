@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
@@ -41,10 +41,6 @@ function relativeDate(iso: string) {
 
 function accentColor(voice: Voice | null | undefined) {
   return voice?.color ?? "#E8A849";
-}
-
-function localAudioSrc(path: string) {
-  return convertFileSrc(path);
 }
 
 function waveformHeight(index: number, max = 88) {
@@ -143,7 +139,9 @@ export default function App() {
   const [historySort, setHistorySort] = useState<HistorySort>("newest");
   const eventSourceRef = useRef<{ close: () => Promise<void> } | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const generationAudioUrlsRef = useRef<Record<string, string>>({});
   const scriptImportRef = useRef<HTMLInputElement | null>(null);
+  const [generationAudioUrls, setGenerationAudioUrls] = useState<Record<string, string>>({});
 
   const selectedVoice = useMemo(
     () => voices.find((voice) => voice.id === selectedVoiceId) ?? voices[0] ?? null,
@@ -196,6 +194,16 @@ export default function App() {
   const estimatedForgeTime = Math.max(1, Math.round(estimatedDuration * 3.5));
   const canGenerate = engineReady && !busy && Boolean(selectedVoice) && Boolean(text.trim());
 
+  useEffect(() => {
+    generationAudioUrlsRef.current = generationAudioUrls;
+  }, [generationAudioUrls]);
+
+  async function refreshHealth() {
+    const healthData = await api.getHealth();
+    setHealth(healthData);
+    return healthData;
+  }
+
   async function refreshHistory() {
     const historyData = await api.getHistory(new URLSearchParams({ limit: "50", sort: "newest" }));
     setHistory(historyData.generations);
@@ -222,26 +230,78 @@ export default function App() {
 
   useEffect(() => {
     void refreshAll();
-    const interval = window.setInterval(() => {
-      void api
-        .getHealth()
-        .then(setHealth)
-        .catch((requestError) => {
-          setError(requestError instanceof Error ? requestError.message : "Unable to reach the backend.");
-        });
-      void refreshHistory().catch(() => {
-        // Keep the current history if a background refresh misses once.
-      });
-    }, 3000);
     return () => {
-      window.clearInterval(interval);
       void eventSourceRef.current?.close();
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
       }
+      Object.values(generationAudioUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
+
+  useEffect(() => {
+    if (busy || health?.status === "ready") {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+
+    const scheduleNext = (delayMs: number) => {
+      timeoutId = window.setTimeout(() => {
+        void pollHealth();
+      }, delayMs);
+    };
+
+    const pollHealth = async () => {
+      try {
+        const nextHealth = await refreshHealth();
+        if (cancelled || nextHealth.status === "ready") {
+          return;
+        }
+        if (!cancelled) {
+          scheduleNext(5_000);
+        }
+        return;
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(requestError instanceof Error ? requestError.message : "Unable to reach the backend.");
+        }
+      }
+
+      if (!cancelled) {
+        scheduleNext(5_000);
+      }
+    };
+
+    scheduleNext(5_000);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [busy, health?.status]);
+
+  function audioMimeType(format: Generation["format"]) {
+    if (format === "mp3") return "audio/mpeg";
+    if (format === "aac") return "audio/aac";
+    return "audio/wav";
+  }
+
+  async function ensureGenerationAudioUrl(entry: Generation) {
+    const existing = generationAudioUrlsRef.current[entry.id];
+    if (existing) return existing;
+
+    const file = await api.downloadGenerationAudio(entry.id);
+    const audioUrl = URL.createObjectURL(
+      new Blob([new Uint8Array(file.bytes)], { type: audioMimeType(entry.format) }),
+    );
+    setGenerationAudioUrls((current) => ({ ...current, [entry.id]: audioUrl }));
+    return audioUrl;
+  }
 
   async function handleGenerate() {
     if (!selectedVoice) {
@@ -256,21 +316,7 @@ export default function App() {
     setBusy(true);
     setError("");
     setProgress({ status: "connecting", percent: 1 });
-
-    try {
-      await eventSourceRef.current?.close();
-      eventSourceRef.current = await api.progressStream((event, type) => {
-        if (type === "complete") {
-          setProgress({ status: "complete", percent: 100, generation_id: event.generation_id });
-        } else if (type === "error") {
-          setError(event.message ?? "Generation failed.");
-        } else {
-          setProgress(event);
-        }
-      });
-    } catch {
-      setProgress({ status: "starting", percent: 2 });
-    }
+    setProgress({ status: "starting", percent: 2 });
 
     try {
       const response = await api.generate({
@@ -286,13 +332,11 @@ export default function App() {
       });
       setView("forge");
       setProgress({ status: "complete", percent: 100, generation_id: response.generation.id });
-      await eventSourceRef.current?.close();
-      void refreshHistory()
-        .catch(() => {
-          // Keep the optimistic state if the background refresh fails.
-        });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Generation failed.");
+      void refreshHealth().catch(() => {
+        // Keep the last-known health state if the refresh misses.
+      });
     } finally {
       setBusy(false);
       window.setTimeout(() => setProgress(null), 2500);
@@ -335,12 +379,23 @@ export default function App() {
   }
 
   async function handleDeleteGeneration(generationId: string) {
+    const audioUrl = generationAudioUrlsRef.current[generationId];
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setGenerationAudioUrls((current) => {
+        const next = { ...current };
+        delete next[generationId];
+        return next;
+      });
+    }
     await api.deleteHistoryItem(generationId);
     setHistory((current) => current.filter((entry) => entry.id !== generationId));
     setHistorySelection((current) => current.filter((id) => id !== generationId));
   }
 
   async function handleClearHistory() {
+    Object.values(generationAudioUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    setGenerationAudioUrls({});
     await api.clearHistory();
     setHistory([]);
     setHistorySelection([]);
@@ -723,7 +778,13 @@ export default function App() {
 
                 <div className="button-row">
                   <button className="primary-button" onClick={() => void handleGenerate()} disabled={!canGenerate}>
-                    {busy ? "Forging..." : engineReady ? "Forge voice  cmd+enter" : engineWarming ? "Preparing engine..." : "Generation unavailable"}
+                    {busy
+                      ? "Forging..."
+                      : engineReady
+                        ? "Forge voice  cmd+enter"
+                        : engineWarming
+                          ? "Preparing engine..."
+                          : "Generation unavailable"}
                   </button>
                   <button className="ghost-button" onClick={() => setText("")}>
                     Clear
@@ -752,7 +813,7 @@ export default function App() {
                     <audio
                       className="audio-player"
                       controls
-                      src={localAudioSrc(latestGeneration.output_path)}
+                      src={generationAudioUrls[latestGeneration.id]}
                     />
                     <div className="metrics-grid">
                       <div>
@@ -1064,7 +1125,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="history-actions">
-                      <audio controls src={localAudioSrc(entry.output_path)} />
+                      <audio controls src={generationAudioUrls[entry.id]} />
                       <div className="button-row">
                         <button className="ghost-button compact" onClick={() => void handleSaveGeneration(entry)}>
                           Save

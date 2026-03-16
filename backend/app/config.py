@@ -53,6 +53,7 @@ class AppPaths:
     presets_manifest: Path
     packaged_preset_audio_dir: Path
     licenses_dir: Path
+    resource_models_dir: Path
 
 
 def get_app_paths() -> AppPaths:
@@ -67,6 +68,7 @@ def get_app_paths() -> AppPaths:
     resource_root = _resource_root()
     presets_root = resource_root / "app" / "presets"
     licenses_dir = resource_root / "licenses"
+    resource_models_dir = resource_root / "models"
 
     return AppPaths(
         app_home=app_home,
@@ -80,6 +82,7 @@ def get_app_paths() -> AppPaths:
         presets_manifest=presets_root / "voices.json",
         packaged_preset_audio_dir=presets_root / "audio",
         licenses_dir=licenses_dir,
+        resource_models_dir=resource_models_dir,
     )
 
 

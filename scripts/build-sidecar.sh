@@ -23,6 +23,8 @@ uv sync --project backend $EXTRAS >/dev/null
 uv run --project backend pyinstaller backend/foundry_vox_backend.spec --noconfirm >/dev/null
 
 mkdir -p src-tauri/binaries
-cp "dist/foundry-vox-backend/foundry-vox-backend" "src-tauri/binaries/foundry-vox-backend-${TARGET_TRIPLE}"
+rm -rf "src-tauri/resources/backend/foundry-vox-backend-${TARGET_TRIPLE}"
+mkdir -p src-tauri/resources/backend
+cp -R "dist/foundry-vox-backend" "src-tauri/resources/backend/foundry-vox-backend-${TARGET_TRIPLE}"
 
-echo "Bundled sidecar at src-tauri/binaries/foundry-vox-backend-${TARGET_TRIPLE}"
+echo "Bundled backend resources at src-tauri/resources/backend/foundry-vox-backend-${TARGET_TRIPLE}"

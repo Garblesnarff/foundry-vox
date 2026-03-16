@@ -4,13 +4,15 @@ use reqwest::{multipart, Method};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fs;
+use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
+use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
-use tauri_plugin_shell::process::CommandEvent;
-use tauri_plugin_shell::ShellExt;
 use tokio::time::sleep;
 use uuid::Uuid;
 
@@ -418,6 +420,22 @@ async fn backend_get_voice_preview(
     .await
 }
 
+#[tauri::command]
+async fn backend_warmup_voice(
+    voice_id: String,
+    runtime: State<'_, RuntimeState>,
+    client: State<'_, BackendClient>,
+) -> Result<Value, String> {
+    backend_request(
+        &runtime,
+        &client,
+        Method::POST,
+        &format!("/voices/{voice_id}/warmup"),
+        None,
+    )
+    .await
+}
+
 async fn run_progress_bridge(
     app: tauri::AppHandle,
     client: reqwest::Client,
@@ -525,6 +543,85 @@ fn open_loopback_port() -> Result<u16, Box<dyn std::error::Error>> {
     Ok(port)
 }
 
+fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fs::create_dir_all(destination)?;
+
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let metadata = fs::symlink_metadata(&source_path)?;
+
+        if metadata.file_type().is_dir() {
+            copy_dir_all(&source_path, &destination_path)?;
+            continue;
+        }
+
+        if metadata.file_type().is_symlink() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::symlink;
+
+                let target = fs::read_link(&source_path)?;
+                if destination_path.exists() {
+                    fs::remove_file(&destination_path)?;
+                }
+                symlink(target, &destination_path)?;
+            }
+            continue;
+        }
+
+        fs::copy(&source_path, &destination_path)?;
+        fs::set_permissions(&destination_path, metadata.permissions())?;
+    }
+
+    Ok(())
+}
+
+fn needs_backend_refresh(
+    source_dir: &Path,
+    staged_dir: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let source_executable = source_dir.join("foundry-vox-backend");
+    let staged_executable = staged_dir.join("foundry-vox-backend");
+
+    if !staged_executable.exists() {
+        return Ok(true);
+    }
+
+    let source_modified = fs::metadata(&source_executable)?.modified()?;
+    let staged_modified = fs::metadata(&staged_executable)?.modified()?;
+    if source_modified > staged_modified {
+        return Ok(true);
+    }
+
+    let staged_metallib = staged_dir.join("_internal").join("mlx").join("lib").join("mlx.metallib");
+    if !staged_metallib.exists() {
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+fn stage_backend_runtime(
+    source_dir: &Path,
+    app_data_dir: &Path,
+    backend_name: &str,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let runtime_root = app_data_dir.join("runtime");
+    let staged_dir = runtime_root.join(backend_name);
+    fs::create_dir_all(&runtime_root)?;
+
+    if needs_backend_refresh(source_dir, &staged_dir)? {
+        if staged_dir.exists() {
+            fs::remove_dir_all(&staged_dir)?;
+        }
+        copy_dir_all(source_dir, &staged_dir)?;
+    }
+
+    Ok(staged_dir)
+}
+
 fn spawn_backend(
     app: &tauri::App,
     api_port: u16,
@@ -534,32 +631,83 @@ fn spawn_backend(
     let app_data_dir = app_handle.path().app_local_data_dir()?;
     std::fs::create_dir_all(&app_data_dir)?;
 
-    let mut sidecar = app_handle
-        .shell()
-        .sidecar("foundry-vox-backend")?
-        .env("FOUNDRY_VOX_HOME", app_data_dir.to_string_lossy().to_string())
-        .env("FOUNDRY_VOX_PORT", api_port.to_string());
+    let arch = if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else {
+        "x86_64"
+    };
+    let resource_dir = app_handle.path().resource_dir()?;
+    let bundled_backend_name = format!("foundry-vox-backend-{arch}-apple-darwin");
+    let backend_dir = [
+        resource_dir.join("resources").join("backend").join(&bundled_backend_name),
+        resource_dir.join("backend").join(&bundled_backend_name),
+    ]
+    .into_iter()
+    .find(|path| path.exists())
+    .ok_or_else(|| {
+        format!(
+            "Bundled backend resources not found under {}",
+            resource_dir.display()
+        )
+    })?;
+    let staged_backend_dir = stage_backend_runtime(&backend_dir, &app_data_dir, &bundled_backend_name)?;
+    let backend_executable = staged_backend_dir.join("foundry-vox-backend");
 
-    if let Some(token) = api_token {
-        sidecar = sidecar.env("FOUNDRY_VOX_API_TOKEN", token.to_string());
+    if !backend_executable.exists() {
+        return Err(format!(
+            "Bundled backend executable not found at {}",
+            backend_executable.display()
+        )
+        .into());
     }
 
-    let (mut rx, _child) = sidecar.spawn()?;
+    let mut command = Command::new(&backend_executable);
+    command
+        .current_dir(&staged_backend_dir)
+        .env("FOUNDRY_VOX_HOME", app_data_dir.to_string_lossy().to_string())
+        .env("FOUNDRY_VOX_PORT", api_port.to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    if let Some(token) = api_token {
+        command.env("FOUNDRY_VOX_API_TOKEN", token);
+    }
+
+    let mut child = command.spawn()?;
+
+    if let Some(stdout) = child.stdout.take() {
+        let stdout_app = app_handle.clone();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines().map_while(Result::ok) {
+                let _ = stdout_app.emit("backend://stdout", line);
+            }
+        });
+    }
+
+    if let Some(stderr) = child.stderr.take() {
+        let stderr_app = app_handle.clone();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                let _ = stderr_app.emit("backend://stderr", line);
+            }
+        });
+    }
 
     tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(bytes) => {
-                    if let Ok(line) = String::from_utf8(bytes) {
-                        let _ = app_handle.emit("backend://stdout", line);
-                    }
-                }
-                CommandEvent::Stderr(bytes) => {
-                    if let Ok(line) = String::from_utf8(bytes) {
-                        let _ = app_handle.emit("backend://stderr", line);
-                    }
-                }
-                _ => {}
+        match child.wait() {
+            Ok(status) => {
+                let _ = app_handle.emit(
+                    "backend://stderr",
+                    format!("Foundry Vox backend exited with status {status}"),
+                );
+            }
+            Err(error) => {
+                let _ = app_handle.emit(
+                    "backend://stderr",
+                    format!("Failed to wait for Foundry Vox backend: {error}"),
+                );
             }
         }
     });
@@ -572,7 +720,6 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let api_port = if cfg!(debug_assertions) { 3456 } else { open_loopback_port()? };
             let api_base = format!("http://127.0.0.1:{api_port}/api/v1");
@@ -620,6 +767,7 @@ fn main() {
             backend_download_generation_audio,
             backend_export_batch,
             backend_get_voice_preview,
+            backend_warmup_voice,
             start_progress_bridge,
             stop_progress_bridge
         ])

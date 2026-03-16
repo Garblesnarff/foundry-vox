@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import shutil
 import wave
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -18,6 +20,35 @@ from .engine import TadaEngine
 from .errors import ApiError, error_payload
 from .routes import export, generate, health, history, settings, voices
 from .services import AppServices, ProgressBroker, utc_now
+
+logger = logging.getLogger(__name__)
+
+MODEL_CACHE_NAMES = (
+    "models--meta-llama--Llama-3.2-1B",
+    "models--HumeAI--tada-codec",
+    "models--HumeAI--tada-1b",
+    "mlx-tada-1b-weights",
+)
+
+
+def _seed_models_dir(paths: object) -> None:
+    resource_models_dir = getattr(paths, "resource_models_dir", None)
+    source_roots = []
+    if resource_models_dir and resource_models_dir.exists():
+        source_roots.append(resource_models_dir)
+
+    huggingface_cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+    if huggingface_cache_dir.exists():
+        source_roots.append(huggingface_cache_dir)
+
+    for source_root in source_roots:
+        for name in MODEL_CACHE_NAMES:
+            source_path = source_root / name
+            target_path = paths.models_dir / name
+            if not source_path.exists() or target_path.exists():
+                continue
+            logger.info("Seeding local model asset %s from %s", name, source_root)
+            shutil.copytree(source_path, target_path, dirs_exist_ok=True)
 
 
 def _load_presets(paths: object, db: Database) -> list[dict[str, object]]:
@@ -70,6 +101,7 @@ async def _bootstrap_model(app: FastAPI) -> None:
                     await services.engine.warmup(
                         warmup_path, warmup_voice.reference_text or "Hello world."
                     )
+                    services.engine.mark_voice_warmed(warmup_voice.id)
         services.health.status = "ready"
         services.health.error = None
         services.health.message = None
@@ -107,6 +139,20 @@ async def _bootstrap_model(app: FastAPI) -> None:
             services.health.setup_title = "Foundry Vox needs attention"
             services.health.setup_detail = exc.message
             services.health.setup_actions = []
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Unexpected failure while bootstrapping the voice engine")
+        services.health.status = "error"
+        services.health.error = "model_error"
+        services.health.message = f"Unexpected startup failure: {exc}"
+        services.health.setup_title = "The local ML runtime is unavailable"
+        services.health.setup_detail = (
+            "Foundry Vox hit an unexpected error while preparing its on-device model stack."
+        )
+        services.health.setup_actions = [
+            f"App models directory: {services.paths.models_dir}",
+            "Verify the required TADA model files are present",
+            "Restart the app after correcting the local model assets",
+        ]
 
 
 @asynccontextmanager
@@ -122,6 +168,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         paths.models_dir,
     ):
         path.mkdir(parents=True, exist_ok=True)
+
+    _seed_models_dir(paths)
 
     db = Database(paths.db_path, paths.app_home)
     await db.initialize()

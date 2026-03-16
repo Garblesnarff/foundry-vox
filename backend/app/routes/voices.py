@@ -36,6 +36,43 @@ async def get_voice(request: Request, voice_id: str) -> VoiceResponse:
     return VoiceResponse(voice=voice)
 
 
+@router.post("/{voice_id}/warmup")
+async def warmup_voice(request: Request, voice_id: str) -> dict[str, bool]:
+    services = request.app.state.services
+    if not services.engine.model_loaded:
+        raise ApiError("model_not_loaded", "The model is still loading.", 503)
+
+    voice = _ensure_voice(await services.db.get_voice(voice_id))
+    if services.engine.is_voice_warmed(voice.id):
+        return {"warmed": True}
+
+    audio_path = services.db.resolve_relative_path(voice.reference_audio_path)
+    if audio_path is None or not audio_path.exists():
+        raise ApiError("invalid_audio", "The reference audio for this voice is missing.", 400)
+
+    async with services.generation_lock:
+        previous_status = services.health.status
+        previous_title = services.health.setup_title
+        previous_detail = services.health.setup_detail
+        previous_actions = list(services.health.setup_actions)
+        services.health.status = "warming_up"
+        services.health.setup_title = f"Warming up {voice.name}"
+        services.health.setup_detail = (
+            "Foundry Vox is compiling Metal kernels for this voice so the first render lands at steady-state speed."
+        )
+        services.health.setup_actions = []
+        try:
+            await services.engine.warmup(audio_path, voice.reference_text or "Hello world.")
+            services.engine.mark_voice_warmed(voice.id)
+        finally:
+            services.health.status = previous_status if services.engine.model_loaded else "loading"
+            services.health.setup_title = previous_title
+            services.health.setup_detail = previous_detail
+            services.health.setup_actions = previous_actions
+
+    return {"warmed": True}
+
+
 @router.post("/clone", response_model=VoiceCloneResponse)
 async def clone_voice(
     request: Request,
