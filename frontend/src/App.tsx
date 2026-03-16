@@ -303,6 +303,31 @@ export default function App() {
     return audioUrl;
   }
 
+  useEffect(() => {
+    if (busy) {
+      return;
+    }
+
+    const visibleEntries = new Map<string, Generation>();
+    if (latestGeneration) {
+      visibleEntries.set(latestGeneration.id, latestGeneration);
+    }
+
+    if (view === "history") {
+      filteredHistory.slice(0, 12).forEach((entry) => visibleEntries.set(entry.id, entry));
+    }
+
+    recentGenerations.forEach((entry) => visibleEntries.set(entry.id, entry));
+
+    visibleEntries.forEach((entry) => {
+      if (!generationAudioUrlsRef.current[entry.id]) {
+        void ensureGenerationAudioUrl(entry).catch(() => {
+          // Leave the player empty if a blob fetch misses once.
+        });
+      }
+    });
+  }, [busy, filteredHistory, latestGeneration, recentGenerations, view]);
+
   async function handleGenerate() {
     if (!selectedVoice) {
       setError("Select a voice before generating.");

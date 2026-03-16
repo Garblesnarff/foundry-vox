@@ -31,7 +31,7 @@
     "category": "Productivity",
     "shortDescription": "Offline Apple Silicon voice generation studio.",
     "longDescription": "Foundry Vox is a local macOS text-to-speech studio that runs voice cloning and speech generation on-device with bundled desktop infrastructure.",
-    "resources": ["resources/backend/**/*"],
+    "resources": ["resources/backend", "resources/backend/**/*"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

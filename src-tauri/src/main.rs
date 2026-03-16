@@ -312,7 +312,9 @@ async fn backend_create_clone(
 ) -> Result<Value, String> {
     let url = format!("{}/voices/clone", runtime.api_base);
     let mut last_error: Option<String> = None;
-    let response = loop {
+    let mut maybe_response = None;
+
+    for attempt in 0..STARTUP_RETRY_ATTEMPTS {
         let audio_part =
             multipart::Part::bytes(payload.audio_bytes.clone()).file_name(payload.filename.clone());
         let form = multipart::Form::new()
@@ -327,38 +329,26 @@ async fn backend_create_clone(
             request = request.header("x-foundry-vox-token", token);
         }
 
-        let mut maybe_response = None;
-        for attempt in 0..STARTUP_RETRY_ATTEMPTS {
-            match request
-                .try_clone()
-                .ok_or_else(|| "Failed to clone the voice upload request.".to_string())?
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    maybe_response = Some(response);
-                    break;
-                }
-                Err(error) if error.is_connect() || error.is_timeout() => {
-                    last_error = Some(error.to_string());
-                    if attempt + 1 < STARTUP_RETRY_ATTEMPTS {
-                        sleep(STARTUP_RETRY_DELAY).await;
-                    }
-                }
-                Err(error) => return Err(error.to_string()),
+        match request.send().await {
+            Ok(response) => {
+                maybe_response = Some(response);
+                break;
             }
+            Err(error) if error.is_connect() || error.is_timeout() => {
+                last_error = Some(error.to_string());
+                if attempt + 1 < STARTUP_RETRY_ATTEMPTS {
+                    sleep(STARTUP_RETRY_DELAY).await;
+                }
+            }
+            Err(error) => return Err(error.to_string()),
         }
+    }
 
-        if let Some(response) = maybe_response {
-            break response;
-        }
-
-        return Err(
-            last_error
-                .clone()
-                .unwrap_or_else(|| "The Foundry Vox backend did not become ready in time.".to_string()),
-        );
-    };
+    let response = maybe_response.ok_or_else(|| {
+        last_error
+            .clone()
+            .unwrap_or_else(|| "The Foundry Vox backend did not become ready in time.".to_string())
+    })?;
     if !response.status().is_success() {
         let fallback = format!("Backend request failed with {}", response.status());
         let error = response
