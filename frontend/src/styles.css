@@ -805,6 +805,15 @@ input::placeholder {
   color: var(--text-dim);
 }
 
+.field-help-emphasis {
+  color: var(--text-soft);
+}
+
+.field-help-emphasis strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .control-field-wide {
   grid-column: 1 / -1;
 }

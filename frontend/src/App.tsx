@@ -173,6 +173,7 @@ export default function App() {
     const avgRtf = history.length ? history.reduce((sum, entry) => sum + entry.rtf, 0) / history.length : 0;
     return { totalAudioSeconds, totalGenerationSeconds, avgRtf };
   }, [history]);
+  const generatedVoiceIds = useMemo(() => new Set(history.map((entry) => entry.voice_id)), [history]);
   const latestGeneration = useMemo(() => history[0] ?? null, [history]);
   const recentGenerations = useMemo(() => history.slice(0, 3), [history]);
   const setupActions = health?.setup_actions ?? [];
@@ -193,6 +194,12 @@ export default function App() {
   const estimatedDuration = Math.max(1, Math.round(wordCount * 0.45));
   const estimatedForgeTime = Math.max(1, Math.round(estimatedDuration * 3.5));
   const canGenerate = engineReady && !busy && Boolean(selectedVoice) && Boolean(text.trim());
+  const launchWarmedVoiceId = settings.warmup_on_launch ? voices[0]?.id ?? null : null;
+  const firstRenderMayBeSlower =
+    Boolean(selectedVoice) &&
+    Boolean(engineReady) &&
+    selectedVoice?.id !== launchWarmedVoiceId &&
+    !generatedVoiceIds.has(selectedVoice.id);
 
   useEffect(() => {
     generationAudioUrlsRef.current = generationAudioUrls;
@@ -769,13 +776,23 @@ export default function App() {
 
                 <label className="control-field">
                   <span>Voice</span>
-                  <select value={selectedVoice?.id ?? ""} onChange={(event) => setSelectedVoiceId(event.target.value)}>
+                  <select
+                    value={selectedVoice?.id ?? ""}
+                    onChange={(event) => setSelectedVoiceId(event.target.value)}
+                    title="Switching voices can make the first render slower while Foundry Vox compiles that voice's prompt shape."
+                  >
                     {voices.map((voice) => (
                       <option key={voice.id} value={voice.id}>
                         {voice.name}
                       </option>
                     ))}
                   </select>
+                  {firstRenderMayBeSlower ? (
+                    <p className="field-help field-help-emphasis">
+                      First render with <strong>{selectedVoice?.name}</strong> may take longer while Foundry Vox settles into this
+                      voice. The next render is usually much faster.
+                    </p>
+                  ) : null}
                 </label>
 
                 <label className="control-field">
@@ -798,11 +815,22 @@ export default function App() {
                     value={styleDirection}
                     onChange={(event) => setStyleDirection(event.target.value)}
                     placeholder="Warm, intimate, with calm pacing"
+                    title="Optional. Leave this blank for the natural preset sound, or add a short note like 'brisk, upbeat' to steer delivery."
                   />
+                  <p className="field-help">Optional direction changes delivery style without changing the selected voice.</p>
                 </label>
 
                 <div className="button-row">
-                  <button className="primary-button" onClick={() => void handleGenerate()} disabled={!canGenerate}>
+                  <button
+                    className="primary-button"
+                    onClick={() => void handleGenerate()}
+                    disabled={!canGenerate}
+                    title={
+                      firstRenderMayBeSlower
+                        ? "This first render may take a little longer while Foundry Vox warms up this voice."
+                        : "Generate audio with the selected voice."
+                    }
+                  >
                     {busy
                       ? "Forging..."
                       : engineReady
@@ -977,7 +1005,7 @@ export default function App() {
                           <p className="eyebrow">{voice.type}</p>
                           <h4>{voice.name}</h4>
                           <span>
-                            {voice.type === "clone"
+                        {voice.type === "clone"
                               ? `${voice.reference_duration_seconds?.toFixed(1) ?? "?"}s reference`
                               : `Preset · ${voice.gender ?? "Unknown"}`}
                           </span>
@@ -985,6 +1013,11 @@ export default function App() {
                         <button
                           className="micro-button"
                           disabled={!engineReady}
+                          title={
+                            !engineReady
+                              ? "Previews unlock once the local model finishes loading."
+                              : "Preview creates a short sample with this voice. The first preview can take a moment on a fresh voice."
+                          }
                           onClick={(event) => {
                             event.stopPropagation();
                             void handleVoicePreview(voice.id);
@@ -1210,7 +1243,7 @@ export default function App() {
                   required
                 />
                 <p className="field-help">
-                  Provide clean speech audio and the exact transcript for what is spoken in that clip.
+                  Provide clean speech audio and the exact transcript for what is spoken in that clip. A dry 10-30 second sample works best.
                 </p>
               </label>
               <label className="control-field control-field-wide">
@@ -1336,10 +1369,14 @@ export default function App() {
                 <select
                   value={String(settings.warmup_on_launch)}
                   onChange={(event) => void handleSaveSettings({ warmup_on_launch: event.target.value === "true" })}
+                  title="Launch warmup primes the default preset so your first render starts faster."
                 >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
                 </select>
+                <p className="field-help">
+                  Launch warmup only primes the default starting voice. Switching to a different voice can still make the first render slower.
+                </p>
               </label>
             </section>
 
