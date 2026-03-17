@@ -9,6 +9,8 @@
     "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:backend\"",
     "build:web": "npm --prefix frontend run build",
     "build:sidecar": "sh ./scripts/build-sidecar.sh",
+    "bench:engine": "uv run --project backend python backend/benchmark_mlx_rtf.py",
+    "bench:engine:report": "uv run --project backend python backend/benchmark_mlx_rtf.py --skip-checks",
     "package:appstore": "./scripts/package_appstore.sh",
     "lint:web": "npm --prefix frontend run lint",
     "tauri:dev": "tauri dev",
