@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import shutil
 import uuid
@@ -90,11 +91,36 @@ class Database:
             db.row_factory = aiosqlite.Row
             existing = await self._fetchall(
                 db,
-                "SELECT id, name FROM voices WHERE type = 'preset'"
+                "SELECT id, name, reference_duration_seconds FROM voices WHERE type = 'preset'"
             )
-            existing_names = {row["name"] for row in existing}
+            existing_by_name = {row["name"]: row for row in existing}
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             for preset in presets:
-                if preset["name"] in existing_names:
+                existing_row = existing_by_name.get(preset["name"])
+                if existing_row is not None:
+                    # Update existing preset if reference audio changed (different duration)
+                    old_dur = existing_row["reference_duration_seconds"] or 0
+                    new_dur = preset.get("reference_duration_seconds") or 0
+                    if abs(old_dur - new_dur) > 0.5:
+                        await db.execute(
+                            """
+                            UPDATE voices SET
+                                reference_audio_path = ?, reference_text = ?,
+                                reference_duration_seconds = ?, description = ?,
+                                tags = ?, color = ?, updated_at = ?
+                            WHERE id = ?
+                            """,
+                            (
+                                preset.get("reference_audio_path"),
+                                preset.get("reference_text"),
+                                new_dur,
+                                preset.get("description"),
+                                json.dumps(preset.get("tags", [])),
+                                preset.get("color"),
+                                now,
+                                existing_row["id"],
+                            ),
+                        )
                     continue
                 voice_id = str(uuid.uuid4())
                 created_at = preset["created_at"]

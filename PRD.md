@@ -35,7 +35,7 @@ This PRD covers the **backend only**. A React frontend mockup is provided separa
 - **ML**: PyTorch (CPU, float32 — this is the optimized config)
 - **Audio**: torchaudio for encoding/decoding, pydub for format conversion (MP3/AAC)
 - **Database**: SQLite via aiosqlite (lightweight, no server, portable)
-- **File storage**: Local filesystem (`~/Documents/FoundryVox/`)
+- **File storage**: Local filesystem (`~/Library/Application Support/Foundry Vox/`)
 
 ### Key Design Decisions
 
@@ -171,23 +171,76 @@ descript-audio-codec        # Required by TADA but not declared as a dependency
 
 ---
 
-## HuggingFace Authentication Requirement
+## Model Distribution (Bundled Weights)
 
-TADA internally loads the `meta-llama/Llama-3.2-1B` tokenizer, which is a **gated model** on HuggingFace. This is NOT documented in TADA's README. Users must:
+Foundry Vox is a consumer Mac app. Users must NEVER interact with HuggingFace, pip, or any CLI tool. All model weights ship with the application.
 
-1. Create a HuggingFace account
-2. Visit the Llama 3.2 model page and accept Meta's license agreement
-3. Wait for approval (can take 5-30 minutes)
-4. Create an access token at huggingface.co/settings/tokens
-5. Run `huggingface-cli login` with the token
+### What gets bundled
 
-The backend startup sequence MUST check for valid HuggingFace auth and surface a clear, actionable error if the Llama tokenizer cannot be loaded. Do not let this fail silently with a cryptic 401 error. Suggested health endpoint response when auth is missing:
+TADA internally loads two model sets:
+- **HumeAI/tada-1b** — the TTS model (~2GB)
+- **HumeAI/tada-codec** — the audio encoder
+- **meta-llama/Llama-3.2-1B tokenizer** — loaded internally by TADA (gated on HuggingFace, but redistributable under Meta's Llama 3.2 Community License)
 
+### Licensing (verified)
+- **TADA**: MIT license — free to bundle and redistribute
+- **Llama 3.2 1B**: Meta Llama 3.2 Community License — permits redistribution with attribution. Requires "Built with Llama" notice in the app (see Legal Requirements section)
+- **descript-audio-codec**: MIT license
+
+### Bundle strategy
+
+All model weights are pre-downloaded during the build process and embedded in the Tauri app bundle under `Resources/models/`. The backend reads weights from this path at startup — no network calls, no authentication, no downloads.
+
+```
+Foundry Vox.app/
+└── Contents/
+    └── Resources/
+        └── models/
+            ├── tada-1b/          # Full model weights
+            ├── tada-codec/       # Encoder weights
+            └── llama-tokenizer/  # Llama 3.2 1B tokenizer files
+```
+
+### Build-time weight preparation
+
+A build script (`scripts/bundle-models.sh`) handles weight preparation:
+1. Downloads weights from HuggingFace (requires developer HF token — build machine only)
+2. Copies tokenizer files from `meta-llama/Llama-3.2-1B` (developer must have accepted Meta's license)
+3. Packages everything into the Tauri resource directory
+4. Verifies checksums
+
+This script runs once during development/CI. End users never see HuggingFace.
+
+### Startup model loading
+
+The backend resolves model paths from the app bundle:
+```python
+import sys, os
+
+def get_model_path(model_name: str) -> str:
+    """Resolve bundled model path. Works in both dev and packaged app."""
+    # Packaged app: models are in Resources/models/
+    bundle_path = os.path.join(
+        os.path.dirname(sys.executable), "..", "Resources", "models", model_name
+    )
+    if os.path.exists(bundle_path):
+        return bundle_path
+    # Dev mode: fall back to local cache or HF_HOME
+    return model_name  # lets transformers resolve from cache
+```
+
+### App size implications
+
+Bundling weights adds ~2-3GB to the app. This is acceptable for a desktop Mac app distributed outside the App Store (direct download). If App Store distribution is pursued later, consider a first-launch download with a polished progress screen as an alternative.
+
+### Health endpoint when models are missing
+
+If the bundled weights are somehow missing or corrupt:
 ```json
 {
   "status": "error",
-  "error": "huggingface_auth_required",
-  "message": "TADA requires access to Meta's Llama 3.2 tokenizer. Please run 'huggingface-cli login' with a valid token. You must also accept Meta's license at huggingface.co/meta-llama/Llama-3.2-1B."
+  "error": "models_missing",
+  "message": "Voice engine files are missing or damaged. Please reinstall Foundry Vox."
 }
 ```
 
@@ -249,7 +302,7 @@ CREATE TABLE settings (
 -- output_format: "wav"
 -- sample_rate: "24000"
 -- bit_depth: "16"
--- output_directory: "~/Documents/FoundryVox/output"
+-- output_directory: "~/Library/Application Support/Foundry Vox/output"
 -- warmup_on_launch: "true"
 ```
 
@@ -258,17 +311,25 @@ CREATE TABLE settings (
 ## Directory Structure
 
 ```
-~/Documents/FoundryVox/
+~/Library/Application Support/Foundry Vox/
 ├── db/
 │   └── foundry_vox.db
 ├── voices/
-│   ├── presets/                 -- Shipped preset reference audio
+│   ├── presets/                 -- Shipped preset reference audio (14 voices)
 │   │   ├── warm-narrator.wav
 │   │   ├── bright-host.wav
 │   │   ├── deep-anchor.wav
 │   │   ├── gentle-reader.wav
 │   │   ├── crisp-lecturer.wav
-│   │   └── velvet-evening.wav
+│   │   ├── velvet-evening.wav
+│   │   ├── young-storyteller.wav
+│   │   ├── wise-elder.wav
+│   │   ├── news-anchor.wav
+│   │   ├── noir-detective.wav
+│   │   ├── cheerful-teacher.wav
+│   │   ├── epic-trailer.wav
+│   │   ├── soothing-guide.wav
+│   │   └── bold-commercial.wav
 │   └── clones/                 -- User-created clone reference audio
 │       └── {uuid}.wav
 ├── output/                     -- Generated audio files
@@ -302,7 +363,7 @@ Returns server status and model state.
 
 Possible `status` values: `"loading"` (model loading), `"warming_up"` (running warmup gen), `"ready"`, `"generating"` (active generation in progress), `"error"`.
 
-When status is `"error"`, include `"error"` and `"message"` fields with actionable details (especially for HuggingFace auth issues).
+When status is `"error"`, include `"error"` and `"message"` fields with actionable, non-technical details (e.g., "Voice engine files are missing. Please reinstall Foundry Vox.").
 
 ---
 
@@ -548,7 +609,7 @@ Return all settings as key-value pairs.
   "output_format": "wav",
   "sample_rate": 24000,
   "bit_depth": 16,
-  "output_directory": "~/Documents/FoundryVox/output",
+  "output_directory": "~/Library/Application Support/Foundry Vox/output",
   "warmup_on_launch": true
 }
 ```
@@ -805,7 +866,7 @@ For batch export with concatenation:
 
 ## Preset Voices
 
-Ship 6 preset voices. Each needs:
+Ship 14 preset voices. Each needs:
 - A ~10-15 second clean WAV reference clip
 - A transcript of what's being said in the clip
 - Metadata (name, gender, color, tags, description)
@@ -861,6 +922,70 @@ PRESET_VOICES = [
         "description": "Smooth, intimate tone with a slight rasp. Late-night radio feel.",
         "tags": ["intimate", "smooth", "radio"],
         "reference_file": "velvet-evening.wav"
+    },
+    {
+        "name": "Young Storyteller",
+        "gender": "M",
+        "color": "#5EB88D",
+        "description": "Casual, conversational twentysomething. Social media, vlogs, casual narration.",
+        "tags": ["casual", "young", "conversational"],
+        "reference_file": "young-storyteller.wav"
+    },
+    {
+        "name": "Wise Elder",
+        "gender": "M",
+        "color": "#8B7355",
+        "description": "Weathered, deliberate voice with gravitas. Heritage, wisdom, reflective pieces.",
+        "tags": ["wise", "gravitas", "elder"],
+        "reference_file": "wise-elder.wav"
+    },
+    {
+        "name": "News Anchor",
+        "gender": "F",
+        "color": "#4A7FB5",
+        "description": "Polished, neutral broadcast delivery. News, corporate, professional.",
+        "tags": ["news", "professional", "neutral"],
+        "reference_file": "news-anchor.wav"
+    },
+    {
+        "name": "Noir Detective",
+        "gender": "M",
+        "color": "#5C5C5C",
+        "description": "Gritty, world-weary voice. Crime fiction, drama, character work.",
+        "tags": ["dramatic", "gritty", "character"],
+        "reference_file": "noir-detective.wav"
+    },
+    {
+        "name": "Cheerful Teacher",
+        "gender": "F",
+        "color": "#F4A261",
+        "description": "Warm, encouraging voice. Education, kids, e-learning.",
+        "tags": ["education", "encouraging", "friendly"],
+        "reference_file": "cheerful-teacher.wav"
+    },
+    {
+        "name": "Epic Trailer",
+        "gender": "M",
+        "color": "#C0392B",
+        "description": "Dramatic, cinematic voice. Trailers, games, hype content.",
+        "tags": ["cinematic", "epic", "trailer"],
+        "reference_file": "epic-trailer.wav"
+    },
+    {
+        "name": "Soothing Guide",
+        "gender": "M",
+        "color": "#7DCEA0",
+        "description": "Gentle, grounding male voice. Meditation, wellness, breathing exercises.",
+        "tags": ["meditation", "soothing", "wellness"],
+        "reference_file": "soothing-guide.wav"
+    },
+    {
+        "name": "Bold Commercial",
+        "gender": "F",
+        "color": "#E74C8B",
+        "description": "Punchy, confident delivery. Ads, promos, product videos.",
+        "tags": ["commercial", "bold", "promo"],
+        "reference_file": "bold-commercial.wav"
     }
 ]
 ```
@@ -869,17 +994,17 @@ PRESET_VOICES = [
 
 ## Startup Sequence
 
-1. Create directory structure if not exists (`~/Documents/FoundryVox/` tree)
+1. Create directory structure if not exists (`~/Library/Application Support/Foundry Vox/` tree)
 2. Initialize SQLite database, run migrations
 3. Seed preset voices if `voices` table is empty
 4. Start FastAPI server on `localhost:3456`
-5. **Check HuggingFace authentication** — attempt to load `meta-llama/Llama-3.2-1B` tokenizer. If it fails with 401/403, set status to `"error"` with actionable message and do NOT proceed to model loading
-6. Load TADA model in background thread (report `status: "loading"` on `/health`)
+5. **Verify bundled model weights** — check that `Resources/models/tada-1b/`, `tada-codec/`, and `llama-tokenizer/` exist and are readable. If missing, set status to `"error"` with message: "Voice engine files are missing or damaged. Please reinstall Foundry Vox."
+6. Load TADA model from bundled weights in background thread (report `status: "loading"` on `/health`)
 7. Apply monkey-patch for internal timing after model load
 8. If `warmup_on_launch` setting is true, run warmup generation (report `status: "warming_up"`)
 9. Set status to `"ready"`
 
-The frontend should poll `GET /health` on startup and show a loading state until `status === "ready"`. If status is `"error"`, display the error message to the user with setup instructions.
+The frontend should poll `GET /health` on startup and show a loading state until `status === "ready"`. During loading, the frontend displays rotating tips about voice selection, style prompts, and reference audio quality (see User Guidance section). If status is `"error"`, display a clear, non-technical error message.
 
 ---
 
@@ -896,7 +1021,7 @@ All error responses follow this format:
 ```
 
 Error codes:
-- `huggingface_auth_required` (503): HuggingFace login missing or Llama license not accepted
+- `models_missing` (503): Bundled model weights are missing or corrupt — user should reinstall
 - `model_not_loaded` (503): Model is still loading
 - `generation_in_progress` (429): Another generation is running
 - `voice_not_found` (404): Voice ID doesn't exist
@@ -986,7 +1111,8 @@ foundry-vox-backend/
 - Test clone flow end-to-end: upload audio -> voice created -> generate with new voice
 - Verify preset voices cannot be deleted or have references replaced
 - Test system_prompt with different emotions (excited, sad, angry, whispering)
-- Verify first HuggingFace auth check catches missing login gracefully
+- Verify bundled model weight detection and clear error if missing/corrupt
+- Verify all 14 preset voices load and generate correctly
 
 ---
 
