@@ -6,7 +6,7 @@
     "description": "Rich, warm male baritone. Great for audiobooks and storytelling.",
     "tags": ["narration", "audiobook", "warm"],
     "reference_file": "warm-narrator.wav",
-    "reference_text": "The forge burns brightest at midnight. Every voice begins as raw metal, waiting for its final shape."
+    "reference_text": "The old lighthouse keeper watched the storm roll in from the west. He'd seen a thousand storms, but this one felt different — heavier somehow, like the sky itself was holding its breath."
   },
   {
     "name": "Bright Host",
@@ -15,7 +15,7 @@
     "description": "Energetic female voice with clear diction. Ideal for podcasts and explainers.",
     "tags": ["podcast", "energetic", "clear"],
     "reference_file": "bright-host.wav",
-    "reference_text": "Welcome back to Foundry Vox, where every line of copy leaves the desk sounding polished and alive."
+    "reference_text": "Welcome back to the show! Today we're diving into something fascinating — the science behind why certain sounds make us feel safe. Buckle up, because this one gets weird."
   },
   {
     "name": "Deep Anchor",
@@ -24,7 +24,7 @@
     "description": "Authoritative deep male voice. Perfect for documentaries and trailers.",
     "tags": ["documentary", "deep", "authority"],
     "reference_file": "deep-anchor.wav",
-    "reference_text": "When the storm rolled across the harbor, the old station answered with a voice carved from iron and distance."
+    "reference_text": "In the summer of nineteen sixty-nine, three men left the Earth behind. What they found on the surface of the moon would change humanity's understanding of its place in the universe."
   },
   {
     "name": "Gentle Reader",
@@ -33,7 +33,7 @@
     "description": "Soft, calming female voice. Suited for meditation and children's content.",
     "tags": ["calm", "soft", "children"],
     "reference_file": "gentle-reader.wav",
-    "reference_text": "Take a slow breath and listen as the room grows quiet, the pages turning softly into evening."
+    "reference_text": "Close your eyes and imagine a quiet meadow. The grass is soft beneath you, and somewhere nearby, a small stream is whispering over smooth stones. You're safe here. There's nowhere else you need to be."
   },
   {
     "name": "Crisp Lecturer",
@@ -42,7 +42,7 @@
     "description": "Precise, measured delivery. Technical tutorials and presentations.",
     "tags": ["technical", "precise", "tutorial"],
     "reference_file": "crisp-lecturer.wav",
-    "reference_text": "First, verify your inputs. Then follow each step in order so the system behaves exactly as expected."
+    "reference_text": "Let's walk through this step by step. First, we initialize the configuration object. Then we pass it to the builder function, which validates each field before constructing the final output."
   },
   {
     "name": "Velvet Evening",
@@ -51,6 +51,78 @@
     "description": "Smooth, intimate tone with a slight rasp. Late-night radio feel.",
     "tags": ["intimate", "smooth", "radio"],
     "reference_file": "velvet-evening.wav",
-    "reference_text": "Midnight settles over the city, and every whispered story glows a little longer in the dark."
+    "reference_text": "It's just past midnight, and the city's finally quiet. There's something about this hour — the way the world slows down, the way every sound feels closer. Stay with me a while."
+  },
+  {
+    "name": "Young Storyteller",
+    "gender": "M",
+    "color": "#5EB88D",
+    "description": "Casual, conversational twentysomething. Social media, vlogs, casual narration.",
+    "tags": ["casual", "young", "conversational"],
+    "reference_file": "young-storyteller.wav",
+    "reference_text": "Okay so here's the thing nobody tells you about moving to a new city — the first two weeks are amazing, week three hits you like a truck, and by month two you finally start finding your people."
+  },
+  {
+    "name": "Wise Elder",
+    "gender": "M",
+    "color": "#8B7355",
+    "description": "Weathered, deliberate voice with gravitas. Heritage, wisdom, reflective pieces.",
+    "tags": ["wise", "gravitas", "elder"],
+    "reference_file": "wise-elder.wav",
+    "reference_text": "My grandfather used to say that patience isn't about waiting — it's about knowing that some things need time to become what they're meant to be. I didn't understand that until I was much older."
+  },
+  {
+    "name": "News Anchor",
+    "gender": "F",
+    "color": "#4A7FB5",
+    "description": "Polished, neutral broadcast delivery. News, corporate, professional.",
+    "tags": ["news", "professional", "neutral"],
+    "reference_file": "news-anchor.wav",
+    "reference_text": "Good evening. Tonight's top story — researchers at the National Weather Service have confirmed what many suspected: this winter will be one for the record books. We go live to our correspondent."
+  },
+  {
+    "name": "Noir Detective",
+    "gender": "M",
+    "color": "#5C5C5C",
+    "description": "Gritty, world-weary voice. Crime fiction, drama, character work.",
+    "tags": ["dramatic", "gritty", "character"],
+    "reference_file": "noir-detective.wav",
+    "reference_text": "She walked into my office like trouble wearing a red dress. I should've told her I was closed for the night. But the rain was coming down hard, and I never was good at saying no."
+  },
+  {
+    "name": "Cheerful Teacher",
+    "gender": "F",
+    "color": "#F4A261",
+    "description": "Warm, encouraging voice. Education, kids, e-learning.",
+    "tags": ["education", "encouraging", "friendly"],
+    "reference_file": "cheerful-teacher.wav",
+    "reference_text": "Great job! You got it right! Now let's try the next one together. Remember, there's no such thing as a wrong answer here — every guess gets us closer to figuring it out."
+  },
+  {
+    "name": "Epic Trailer",
+    "gender": "M",
+    "color": "#C0392B",
+    "description": "Dramatic, cinematic voice. Trailers, games, hype content.",
+    "tags": ["cinematic", "epic", "trailer"],
+    "reference_file": "epic-trailer.wav",
+    "reference_text": "They said the old world was gone. They said nothing could survive beyond the wall. But one soldier refused to believe it — and what she discovered would ignite a war across every kingdom."
+  },
+  {
+    "name": "Soothing Guide",
+    "gender": "M",
+    "color": "#7DCEA0",
+    "description": "Gentle, grounding male voice. Meditation, wellness, breathing exercises.",
+    "tags": ["meditation", "soothing", "wellness"],
+    "reference_file": "soothing-guide.wav",
+    "reference_text": "Take a slow breath in through your nose. Hold it gently. Now let it go. Feel your shoulders drop, your jaw soften. With each breath, you're letting go of everything that doesn't serve you."
+  },
+  {
+    "name": "Bold Commercial",
+    "gender": "F",
+    "color": "#E74C8B",
+    "description": "Punchy, confident delivery. Ads, promos, product videos.",
+    "tags": ["commercial", "bold", "promo"],
+    "reference_file": "bold-commercial.wav",
+    "reference_text": "Introducing the one thing your morning routine has been missing. It's faster, smoother, and designed for people who don't have time to wait. Available now — because your best day starts today."
   }
 ]
