@@ -26,6 +26,52 @@ const DEFAULT_SETTINGS: Settings = {
   warmup_on_launch: true,
 };
 
+const ERROR_MESSAGES: Record<string, string> = {
+  models_missing: "The voice engine files are missing or damaged. Please reinstall Foundry Vox.",
+  model_not_loaded: "The voice engine is still starting up. Please wait a moment and try again.",
+  generation_in_progress: "A generation is already running. Please wait for it to finish.",
+  voice_not_found: "This voice could not be found. It may have been deleted.",
+  generation_not_found: "This audio file could not be found. It may have been deleted.",
+  invalid_audio: "This audio file couldn't be read. Please try a different file (WAV, MP3, or M4A).",
+  audio_too_short: "This clip is too short. Please use a recording that's at least 6 seconds long.",
+  text_too_long: "Your text is over the 50,000 character limit. Try splitting it into smaller sections.",
+  text_empty: "Please enter some text to generate audio from.",
+  preset_immutable: "Built-in voices can't be modified.",
+  disk_full: "Your disk is full. Free up some space and try again.",
+  model_error: "Something went wrong with the voice engine. Try again, or restart the app if it keeps happening.",
+  out_of_memory: "Your Mac ran out of available memory. Close some other apps and try again.",
+};
+
+const LOADING_TIPS = [
+  "The voice you choose sets the tone. Try a few presets to find your starting point.",
+  "Want more emotion? The reference audio clip is the strongest control \u2014 an excited clip produces excited speech.",
+  "Style Direction is a gentle nudge, not a hard steer. Think of it as mood lighting for the voice.",
+  "Longer text generates more efficiently. A full paragraph runs ~3x faster per second of audio than a single sentence.",
+  "You can clone any voice from a 10-second audio clip. Longer clips with clear speech give the best results.",
+  "All generation happens locally on your Mac. Nothing leaves your machine \u2014 ever.",
+  "The first word of each generation may sound slightly different. This is a known characteristic of the voice engine.",
+  "WAV gives you the highest quality. Use MP3 or AAC when you need smaller file sizes.",
+  "Try the same text with different voices to hear how much character the voice adds.",
+  "Use the History tab to find and re-download any audio you've generated.",
+  "Switching voices? The first generation with each new voice takes longer while the engine compiles its profile. After that, it's much faster.",
+];
+
+const PROGRESS_LABELS: Record<string, string> = {
+  connecting: "Preparing voice...",
+  starting: "Preparing voice...",
+  encoding: "Preparing voice...",
+  generating: "Generating audio...",
+  decoding: "Finalizing...",
+  complete: "Done!",
+};
+
+const CLONE_QUALITY_FEEDBACK: Record<string, { label: string; message: string }> = {
+  excellent: { label: "Excellent", message: "Excellent reference audio. This will produce very accurate voice cloning." },
+  good: { label: "Good", message: "Good reference audio. You should get solid results." },
+  fair: { label: "Fair", message: "Usable, but results will improve with a longer or cleaner recording. Tips: record in a quiet room, speak clearly, aim for 10+ seconds." },
+  poor: { label: "Poor", message: "This recording may not produce good results. The audio is too short or has too much background noise. Try recording in a quieter environment with at least 10 seconds of clear speech." },
+};
+
 function formatSeconds(value: number) {
   return value >= 60 ? `${Math.floor(value / 60)}m ${Math.round(value % 60)}s` : `${value.toFixed(1)}s`;
 }
@@ -107,6 +153,14 @@ function EmberParticles({ active }: { active: boolean }) {
   );
 }
 
+function humanError(raw: string): string {
+  const code = raw.toLowerCase().replace(/\s+/g, "_");
+  for (const [key, message] of Object.entries(ERROR_MESSAGES)) {
+    if (code.includes(key) || raw.includes(key)) return message;
+  }
+  return raw;
+}
+
 export default function App() {
   const [view, setView] = useState<View>("forge");
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -117,7 +171,7 @@ export default function App() {
   const [text, setText] = useState(
     "The forge burns brightest at midnight. Every voice begins as raw metal, waiting for its final shape.",
   );
-  const [styleDirection, setStyleDirection] = useState("");
+
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [error, setError] = useState<string>("");
   const [busy, setBusy] = useState(false);
@@ -142,6 +196,7 @@ export default function App() {
   const generationAudioUrlsRef = useRef<Record<string, string>>({});
   const scriptImportRef = useRef<HTMLInputElement | null>(null);
   const [generationAudioUrls, setGenerationAudioUrls] = useState<Record<string, string>>({});
+  const [loadingTipIndex, setLoadingTipIndex] = useState(0);
 
   const selectedVoice = useMemo(
     () => voices.find((voice) => voice.id === selectedVoiceId) ?? voices[0] ?? null,
@@ -174,6 +229,7 @@ export default function App() {
     return { totalAudioSeconds, totalGenerationSeconds, avgRtf };
   }, [history]);
   const generatedVoiceIds = useMemo(() => new Set(history.map((entry) => entry.voice_id)), [history]);
+  const [sessionCompiledVoiceIds, setSessionCompiledVoiceIds] = useState<Set<string>>(new Set());
   const latestGeneration = useMemo(() => history[0] ?? null, [history]);
   const recentGenerations = useMemo(() => history.slice(0, 3), [history]);
   const setupActions = health?.setup_actions ?? [];
@@ -199,7 +255,7 @@ export default function App() {
     Boolean(selectedVoice) &&
     Boolean(engineReady) &&
     selectedVoice?.id !== launchWarmedVoiceId &&
-    !generatedVoiceIds.has(selectedVoice.id);
+    !sessionCompiledVoiceIds.has(selectedVoice!.id);
 
   useEffect(() => {
     generationAudioUrlsRef.current = generationAudioUrls;
@@ -231,7 +287,7 @@ export default function App() {
       setSettings(settingsData);
       setError("");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load Foundry Vox.");
+      setError(humanError(requestError instanceof Error ? requestError.message : "Unable to load Foundry Vox."));
     }
   }
 
@@ -273,7 +329,7 @@ export default function App() {
         return;
       } catch (requestError) {
         if (!cancelled) {
-          setError(requestError instanceof Error ? requestError.message : "Unable to reach the backend.");
+          setError(humanError(requestError instanceof Error ? requestError.message : "Unable to reach the backend."));
         }
       }
 
@@ -335,13 +391,36 @@ export default function App() {
     });
   }, [busy, filteredHistory, latestGeneration, recentGenerations, view]);
 
+  // Rotate loading tips every 5 seconds while engine is not ready
+  useEffect(() => {
+    if (engineReady) return;
+    const interval = window.setInterval(() => {
+      setLoadingTipIndex((current) => (current + 1) % LOADING_TIPS.length);
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [engineReady]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey) {
+        if (event.key === "1") { event.preventDefault(); setView("forge"); }
+        else if (event.key === "2") { event.preventDefault(); setView("library"); }
+        else if (event.key === "3") { event.preventDefault(); setView("history"); }
+        else if (event.key === "s" && latestGeneration) { event.preventDefault(); void handleSaveGeneration(latestGeneration); }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [latestGeneration]);
+
   async function handleGenerate() {
     if (!selectedVoice) {
-      setError("Select a voice before generating.");
+      setError("Choose a voice to get started.");
       return;
     }
     if (!text.trim()) {
-      setError("Enter some text before generating.");
+      setError(ERROR_MESSAGES.text_empty);
       return;
     }
 
@@ -354,7 +433,7 @@ export default function App() {
       const response = await api.generate({
         text,
         voice_id: selectedVoice.id,
-        system_prompt: styleDirection || null,
+        system_prompt: null,
         format: settings.output_format,
         sample_rate: settings.sample_rate,
       });
@@ -362,10 +441,11 @@ export default function App() {
         const withoutDuplicate = current.filter((entry) => entry.id !== response.generation.id);
         return [response.generation, ...withoutDuplicate];
       });
+      setSessionCompiledVoiceIds((current) => new Set([...current, selectedVoice.id]));
       setView("forge");
       setProgress({ status: "complete", percent: 100, generation_id: response.generation.id });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Generation failed.");
+      setError(humanError(requestError instanceof Error ? requestError.message : "Generation failed."));
       void refreshHealth().catch(() => {
         // Keep the last-known health state if the refresh misses.
       });
@@ -388,8 +468,10 @@ export default function App() {
 
     try {
       const response = await api.createClone(formData);
+      const rating = response.quality.quality_rating.toLowerCase();
+      const feedback = CLONE_QUALITY_FEEDBACK[rating];
       setCloneQuality(
-        `${response.quality.quality_rating.toUpperCase()} · ${response.quality.duration_seconds.toFixed(1)}s · SNR ${response.quality.snr_estimate_db}dB`,
+        feedback ? feedback.message : `${response.quality.quality_rating.toUpperCase()} · ${response.quality.duration_seconds.toFixed(1)}s · SNR ${response.quality.snr_estimate_db}dB`,
       );
       setVoices((current) => [response.voice, ...current]);
       setSelectedVoiceId(response.voice.id);
@@ -400,7 +482,7 @@ export default function App() {
       setCloneTags("personal, clone");
       setView("library");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Voice cloning failed.");
+      setError(humanError(requestError instanceof Error ? requestError.message : "Voice cloning failed."));
     }
   }
 
@@ -596,11 +678,11 @@ export default function App() {
           <section className={`setup-card ${health.status}`}>
             <div className="setup-copy">
               <p className="eyebrow">Engine setup</p>
-              <h2>{health.setup_title ?? (health.status === "warming_up" ? "Warming up the model" : "Preparing the voice engine")}</h2>
+              <h2>{health.status === "warming_up" ? "Warming up..." : "Firing up the forge..."}</h2>
               <p>
-                {health.setup_detail ??
-                  health.message ??
-                  "Foundry Vox is still preparing its local runtime before generation becomes available."}
+                {health.status === "warming_up"
+                  ? "Running a quick test generation to get everything ready."
+                  : "Loading the voice engine. This takes about 30 seconds on first launch."}
               </p>
             </div>
             <div className="setup-meta">
@@ -633,6 +715,7 @@ export default function App() {
                 </div>
               ))}
             </div>
+            <p className="loading-tip">{LOADING_TIPS[loadingTipIndex]}</p>
           </section>
         ) : null}
 
@@ -716,11 +799,11 @@ export default function App() {
                   value={text}
                   onChange={(event) => setText(event.target.value)}
                   onKeyDown={handleForgeEditorKeyDown}
-                  placeholder="Type or paste your script here..."
+                  placeholder="Type or paste your text here..."
                 />
 
                 <div className="script-footer">
-                  <span>{wordCount} words · {charCount} chars</span>
+                  <span>{charCount.toLocaleString()} / 50,000 characters</span>
                   <span>~{estimatedDuration}s audio · ~{estimatedForgeTime}s forge time</span>
                 </div>
               </article>
@@ -743,7 +826,7 @@ export default function App() {
                 {progress ? (
                   <div className="progress-block">
                     <div className="progress-meta">
-                      <span>{progress.status}</span>
+                      <span>{PROGRESS_LABELS[progress.status] ?? progress.status}</span>
                       <strong>{Math.round(progress.percent)}%</strong>
                     </div>
                     <div className="progress-track">
@@ -758,7 +841,7 @@ export default function App() {
                 ) : (
                   <p className="wave-note">
                     {health?.status === "ready"
-                      ? "The forge is primed. Generate locally with your selected voice and output format."
+                      ? "The forge is ready. Select a voice, type your text, and hit Generate."
                       : "The model is still warming up. Once ready, the first render will appear here."}
                   </p>
                 )}
@@ -789,8 +872,7 @@ export default function App() {
                   </select>
                   {firstRenderMayBeSlower ? (
                     <p className="field-help field-help-emphasis">
-                      First render with <strong>{selectedVoice?.name}</strong> may take longer while Foundry Vox settles into this
-                      voice. The next render is usually much faster.
+                      First generation with <strong>{selectedVoice?.name}</strong> takes extra time while the engine compiles this voice's profile. After that, generations with this voice will be much faster for the rest of the session.
                     </p>
                   ) : null}
                 </label>
@@ -809,32 +891,30 @@ export default function App() {
                   </select>
                 </label>
 
-                <label className="control-field">
-                  <span>Style direction</span>
-                  <input
-                    value={styleDirection}
-                    onChange={(event) => setStyleDirection(event.target.value)}
-                    placeholder="Warm, intimate, with calm pacing"
-                    title="Optional. Leave this blank for the natural preset sound, or add a short note like 'brisk, upbeat' to steer delivery."
-                  />
-                  <p className="field-help">Optional direction changes delivery style without changing the selected voice.</p>
-                </label>
+                {firstRenderMayBeSlower ? (
+                  <div className="first-gen-inline-notice">
+                    <span className="first-gen-inline-icon">⏱</span>
+                    <span>First forge with <strong>{selectedVoice?.name}</strong> takes longer — the engine needs to compile this voice. It'll be fast after that.</span>
+                  </div>
+                ) : null}
 
                 <div className="button-row">
                   <button
-                    className="primary-button"
+                    className={`primary-button${firstRenderMayBeSlower ? " first-gen-glow" : ""}`}
                     onClick={() => void handleGenerate()}
                     disabled={!canGenerate}
                     title={
                       firstRenderMayBeSlower
-                        ? "This first render may take a little longer while Foundry Vox warms up this voice."
+                        ? "First generation with a new voice takes extra time while the engine compiles its profile. Subsequent generations will be much faster."
                         : "Generate audio with the selected voice."
                     }
                   >
                     {busy
                       ? "Forging..."
                       : engineReady
-                        ? "Forge voice  cmd+enter"
+                        ? firstRenderMayBeSlower
+                          ? "Forge voice (slower first run)"
+                          : "Forge voice  cmd+enter"
                         : engineWarming
                           ? "Preparing engine..."
                           : "Generation unavailable"}
@@ -869,7 +949,7 @@ export default function App() {
                       src={generationAudioUrls[latestGeneration.id]}
                     />
                     <div className="metrics-grid">
-                      <div>
+                      <div title="Real-time factor — how many seconds of processing per second of audio. Lower is faster.">
                         <span>RTF</span>
                         <strong>{latestGeneration.rtf.toFixed(1)}x</strong>
                       </div>
@@ -1199,8 +1279,10 @@ export default function App() {
 
               {filteredHistory.length === 0 ? (
                 <article className="empty-card">
-                  <h3>No forged clips match those filters.</h3>
-                  <p>Try clearing the search or render a fresh sample from the Forge tab.</p>
+                  <h3>{history.length === 0 ? "Nothing here yet" : "No forged clips match those filters."}</h3>
+                  <p>{history.length === 0
+                    ? "Your generated audio will appear here. Head to the Forge to create your first one."
+                    : "Try clearing the search or changing the filter."}</p>
                 </article>
               ) : null}
             </div>
@@ -1215,7 +1297,7 @@ export default function App() {
             <div className="section-header">
               <div>
                 <p className="eyebrow">Clone voice</p>
-                <h2>Reference upload</h2>
+                <h2>Clone a voice</h2>
               </div>
               <button type="button" className="icon-button" onClick={() => setCloneOpen(false)}>
                 Close
@@ -1243,19 +1325,18 @@ export default function App() {
                   required
                 />
                 <p className="field-help">
-                  Provide clean speech audio and the exact transcript for what is spoken in that clip. A dry 10-30 second sample works best.
+                  Upload a clean audio clip of the voice you want to clone. For best results, use a recording that's at least 10 seconds long with minimal background noise. WAV, MP3, or M4A.
                 </p>
               </label>
               <label className="control-field control-field-wide">
-                <span>Transcript of the reference audio</span>
+                <span>What's being said in the clip? (optional)</span>
                 <textarea
                   value={cloneTranscript}
                   onChange={(event) => setCloneTranscript(event.target.value)}
-                  placeholder="Paste the exact words spoken in the uploaded audio."
-                  required
+                  placeholder="Type exactly what's said in the reference audio..."
                 />
                 <p className="field-help">
-                  The transcript should closely match the uploaded audio. Auto-transcription is currently disabled.
+                  If you know exactly what's said in the reference audio, type it here. This helps the engine match the voice more accurately. If you leave it blank, the engine will transcribe it automatically.
                 </p>
               </label>
               <label className="control-field control-field-wide">
