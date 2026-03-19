@@ -641,7 +641,7 @@ export default function App() {
           <div className="brand-lockup">
             <div className="brand-mark">F</div>
             <div>
-              <p className="eyebrow">Local Voice Forge</p>
+              <p className="eyebrow">Local voice forge</p>
               <h1>Foundry Vox</h1>
             </div>
           </div>
@@ -772,7 +772,6 @@ export default function App() {
               </div>
 
               <div className="selected-voice-card" style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
-                <span className="eyebrow">Selected</span>
                 <h3>{selectedVoice?.name ?? "No voice selected"}</h3>
                 <p>{selectedVoice?.description ?? "Choose a preset or clone a new reference voice."}</p>
                 <div className="chip-row">
@@ -789,7 +788,6 @@ export default function App() {
               <article className="forge-script-card">
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">Script</p>
                     <h2>Shape the narration</h2>
                   </div>
                   <div className="section-actions">
@@ -828,7 +826,6 @@ export default function App() {
                 <EmberParticles active={busy} />
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">Forge</p>
                     <h2>{busy ? "Heating the metal" : "Ready for output"}</h2>
                   </div>
                   <div className="forge-wave-meta">
@@ -872,7 +869,6 @@ export default function App() {
               <article className="control-card">
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">Direction</p>
                     <h3>Performance settings</h3>
                   </div>
                 </div>
@@ -989,7 +985,7 @@ export default function App() {
                 {latestGeneration ? <div className="render-accent-bar" /> : null}
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">{latestGeneration ? `${latestGeneration.voice_name} · ${(latestGeneration.quality ?? "balanced").toUpperCase()}` : "Latest render"}</p>
+                    <p className="eyebrow">{latestGeneration ? `${latestGeneration.voice_name} · ${latestGeneration.quality ?? "balanced"}` : "Latest render"}</p>
                     <h3>{latestGeneration ? formatSeconds(latestGeneration.duration_seconds) + " of audio" : "Nothing forged yet"}</h3>
                   </div>
                   {latestGeneration ? (
@@ -1060,7 +1056,6 @@ export default function App() {
                 <div className="section-header">
                   <div>
                     <p className="eyebrow">Recent forges</p>
-                    <h3>Latest sessions</h3>
                   </div>
                   <button className="micro-button" onClick={() => setView("history")}>
                     View all
@@ -1119,7 +1114,7 @@ export default function App() {
           <section className="library-page">
             <div className="section-title">
               <div>
-                <p className="eyebrow">Voice Library</p>
+                <p className="eyebrow">Voice library</p>
                 <h2>Preset and cloned references</h2>
               </div>
               <div className="section-actions">
@@ -1256,7 +1251,7 @@ export default function App() {
           <section className="history-page">
             <div className="section-title">
               <div>
-                <p className="eyebrow">Forge History</p>
+                <p className="eyebrow">Forge history</p>
                 <h2>Rendered audio archive</h2>
               </div>
               <div className="button-row">

@@ -141,8 +141,7 @@ export default function ForgeVisualizer({ state, color, progress }: ForgeVisuali
       const barWidth = Math.max(2, (w - BAR_GAP * (BAR_COUNT - 1)) / BAR_COUNT);
       const [cr, cg, cb] = hexToRgb(color || "#e8a849");
 
-      // Idle/complete uses muted base color; generating uses voice accent
-      const isActive = state === "generating" || state === "warming";
+      // Three-tier color: generating = full accent, warming = desaturated hint, idle/complete = muted neutral
 
       for (let i = 0; i < BAR_COUNT; i++) {
         bars[i].tick(dt);
@@ -153,8 +152,14 @@ export default function ForgeVisualizer({ state, color, progress }: ForgeVisuali
         const y = h - barH;
         const opacity = opacs[i].value;
 
-        if (isActive) {
+        if (state === "generating") {
           ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${opacity})`;
+        } else if (state === "warming") {
+          // Partially desaturated — blend accent 35% toward warm neutral
+          const wr = Math.round(cr * 0.35 + 74 * 0.65);
+          const wg = Math.round(cg * 0.35 + 69 * 0.65);
+          const wb = Math.round(cb * 0.35 + 62 * 0.65);
+          ctx.fillStyle = `rgba(${wr}, ${wg}, ${wb}, ${opacity * 0.8})`;
         } else {
           // Muted neutral tone for idle/complete
           ctx.fillStyle = `rgba(${Math.round(cr * 0.5 + 58)}, ${Math.round(cg * 0.5 + 53)}, ${Math.round(cb * 0.5 + 48)}, ${opacity * 0.7})`;
@@ -165,8 +170,8 @@ export default function ForgeVisualizer({ state, color, progress }: ForgeVisuali
         ctx.roundRect(x, y, barWidth, barH, BAR_RADIUS);
         ctx.fill();
 
-        // Top highlight on active bars
-        if (isActive && bars[i].value > 0.3) {
+        // Top highlight only during active generation
+        if (state === "generating" && bars[i].value > 0.3) {
           ctx.fillStyle = `rgba(255, 255, 255, ${opacity * 0.12})`;
           ctx.beginPath();
           ctx.roundRect(x, y, barWidth, Math.min(barH, 4), BAR_RADIUS);

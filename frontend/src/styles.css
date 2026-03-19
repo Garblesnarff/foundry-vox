@@ -19,6 +19,7 @@
   --olive: #7b8f6a;
   --plum: #9b8ec4;
   --danger: #8b4a4a;
+  --sidebar: #13110e;
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
 }
 
@@ -76,7 +77,7 @@ textarea:focus,
 input:focus,
 select:focus {
   outline: none;
-  border-color: #494037;
+  border-color: rgba(232, 168, 73, 0.3);
 }
 
 textarea::placeholder,
@@ -187,19 +188,29 @@ input::placeholder {
   box-shadow: 0 8px 18px rgba(201, 120, 58, 0.3);
 }
 
+/* Serif — brand elements only */
 .brand-lockup h1,
+.setup-copy h2,
+.about-card h2,
+.voice-detail-panel h3 {
+  margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-weight: 600;
+}
+
+/* Sans-serif — card subtitles */
 .section-title h2,
 .section-header h2,
 .section-header h3,
 .selected-voice-card h3,
-.voice-detail-panel h3,
-.about-card h2,
 .stat-card strong,
 .control-card h3,
 .latest-render-card h3 {
   margin: 0;
-  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-family: -apple-system, "Helvetica Neue", sans-serif;
   font-weight: 600;
+  font-size: 16px;
+  color: var(--text-soft);
 }
 
 .brand-lockup h1 {
@@ -209,10 +220,10 @@ input::placeholder {
 
 .eyebrow {
   margin: 0 0 4px;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  font-weight: 500;
   color: var(--text-dim);
 }
 
@@ -419,8 +430,20 @@ input::placeholder {
 .control-field,
 .settings-grid > .control-field {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   box-shadow: var(--shadow);
+  transition: border-color 0.2s ease;
+}
+
+.forge-script-card:hover,
+.forge-wave-card:hover,
+.control-card:hover,
+.latest-render-card:hover,
+.recent-forges-card:hover,
+.session-card:hover,
+.history-card:hover,
+.about-card:hover {
+  border-color: var(--border);
 }
 
 .error-banner {
@@ -599,8 +622,7 @@ input::placeholder {
 .setup-meta {
   color: var(--text-dim);
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
 }
 
 .status-pill {
@@ -673,8 +695,8 @@ input::placeholder {
   padding: 16px;
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(22, 20, 15, 0.98), rgba(20, 18, 14, 0.94)),
-    radial-gradient(circle at top center, rgba(232, 168, 73, 0.07), transparent 34%);
+    linear-gradient(180deg, rgba(16, 14, 11, 0.98), rgba(13, 11, 9, 0.96)),
+    radial-gradient(circle at top center, rgba(232, 168, 73, 0.04), transparent 34%);
 }
 
 .rail-header {
@@ -694,7 +716,7 @@ input::placeholder {
   width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
-  background: #1e1b18;
+  background: #15120d;
   border: 1px solid transparent;
   color: var(--text-soft);
   display: grid;
@@ -742,8 +764,7 @@ input::placeholder {
 .voice-rail-copy span,
 .voice-card-copy span {
   font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-dim);
 }
 
@@ -758,9 +779,9 @@ input::placeholder {
   padding: 14px;
   border-radius: 12px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--voice-accent) 10%, #1f1c19), #1a1714),
+    linear-gradient(180deg, color-mix(in srgb, var(--voice-accent) 10%, #17140f), #14110d),
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
-  border: 1px solid color-mix(in srgb, var(--voice-accent) 30%, transparent);
+  border: 1px solid transparent;
 }
 
 .selected-voice-card p,
@@ -805,11 +826,11 @@ input::placeholder {
 }
 
 .section-header h2 {
-  font-size: 24px;
+  font-size: 17px;
 }
 
 .section-header h3 {
-  font-size: 20px;
+  font-size: 15px;
 }
 
 .forge-textarea,
@@ -819,11 +840,19 @@ input::placeholder {
 .search-input,
 .history-toolbar select {
   width: 100%;
-  border: 1px solid var(--border);
-  background: rgba(12, 10, 8, 0.7);
-  color: var(--text);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.control-field select:hover,
+.control-field input:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .forge-textarea {
@@ -865,10 +894,19 @@ input::placeholder {
 }
 
 .primary-button {
-  background: linear-gradient(135deg, var(--gold), var(--copper));
-  color: #141210;
-  border-color: transparent;
-  font-weight: 700;
+  background: transparent;
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 40%, transparent);
+  font-weight: 600;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 15%, transparent);
+  border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+}
+
+.primary-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 22%, transparent);
 }
 
 .ghost-button {
@@ -977,6 +1015,9 @@ input::placeholder {
 
 .primary-button.first-gen-glow {
   position: relative;
+  background: linear-gradient(135deg, var(--gold), var(--copper));
+  color: #141210;
+  border-color: transparent;
   animation: gentle-pulse 2.4s ease-in-out infinite;
 }
 
@@ -1080,10 +1121,11 @@ input::placeholder {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 14px;
-  border-radius: 12px;
-  background: var(--panel-2);
+  gap: 6px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  border: none;
   box-shadow: none;
 }
 
@@ -1132,11 +1174,17 @@ input::placeholder {
   gap: 3px;
   padding: 10px 11px;
   border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-soft);
   cursor: pointer;
   text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.quality-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .quality-chip strong {
@@ -1207,9 +1255,8 @@ input::placeholder {
 .detail-stats span,
 .stat-card span {
   display: block;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0;
   color: var(--text-dim);
   margin-bottom: 6px;
 }
@@ -1227,9 +1274,10 @@ input::placeholder {
 /* ── Custom Player (Latest Render) ── */
 
 .render-accent-bar {
-  height: 3px;
-  border-radius: 3px 3px 0 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
   background: var(--voice-accent, var(--gold));
+  opacity: 0.6;
   margin: -18px -18px 14px;
   width: calc(100% + 36px);
 }
@@ -1308,9 +1356,8 @@ input::placeholder {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0;
   color: var(--text-dim);
   padding-top: 4px;
 }
@@ -1334,10 +1381,15 @@ input::placeholder {
   width: 100%;
   padding: 12px;
   border-radius: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: #1e1b18;
   text-align: left;
   color: var(--text-soft);
+  transition: border-color 0.15s ease;
+}
+
+.recent-forge-item:hover {
+  border-color: var(--border);
 }
 
 .recent-forge-item p {
@@ -1389,18 +1441,32 @@ input::placeholder {
 .session-stats strong {
   color: var(--text-soft);
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
 }
 
 .chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
+  gap: 0;
+  margin-top: 8px;
 }
 
-.chip,
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 0;
+  background: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.chip + .chip::before {
+  content: "\00b7";
+  margin: 0 6px;
+  color: var(--text-dim);
+}
+
 .quality-badge {
   display: inline-flex;
   align-items: center;
@@ -1409,8 +1475,7 @@ input::placeholder {
   background: rgba(255, 255, 255, 0.06);
   color: #ead7b4;
   font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .library-page,
