@@ -237,6 +237,61 @@ async def value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
     return JSONResponse(status_code=status, content=error_payload(error, message))
 
 
+@app.exception_handler(OSError)
+async def os_error_handler(_: Request, exc: OSError) -> JSONResponse:
+    import errno as errno_mod
+
+    if exc.errno == errno_mod.ENOSPC:
+        return JSONResponse(
+            status_code=507,
+            content=error_payload("disk_full", "Your disk is full. Free up some space and try again."),
+        )
+    if exc.errno == errno_mod.EACCES:
+        return JSONResponse(
+            status_code=403,
+            content=error_payload("permission_denied", "Foundry Vox doesn't have permission to write to the output folder."),
+        )
+    logger.exception("Unhandled OS error: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content=error_payload("system_error", f"A system error occurred: {exc.strerror or str(exc)}"),
+    )
+
+
+@app.exception_handler(MemoryError)
+async def memory_error_handler(_: Request, exc: MemoryError) -> JSONResponse:
+    logger.exception("Out of memory: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content=error_payload("out_of_memory", "Your Mac ran out of available memory. Close some other apps and try again."),
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled exception: %s", exc)
+    raw = str(exc).lower()
+    if "no space left" in raw or "disk full" in raw or "unable to open database" in raw:
+        return JSONResponse(
+            status_code=507,
+            content=error_payload("disk_full", "Your disk is full. Free up some space and try again."),
+        )
+    if "out of memory" in raw or "cannot allocate" in raw:
+        return JSONResponse(
+            status_code=500,
+            content=error_payload("out_of_memory", "Your Mac ran out of available memory. Close some other apps and try again."),
+        )
+    if "database" in raw and ("locked" in raw or "readonly" in raw or "corrupt" in raw):
+        return JSONResponse(
+            status_code=500,
+            content=error_payload("system_error", "The database is temporarily unavailable. Try again in a moment."),
+        )
+    return JSONResponse(
+        status_code=500,
+        content=error_payload("model_error", "Something went wrong. Try again, or restart the app if it keeps happening."),
+    )
+
+
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(voices.router, prefix=API_PREFIX)
 app.include_router(generate.router, prefix=API_PREFIX)
