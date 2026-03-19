@@ -4,6 +4,8 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
 import { QUALITY_PRESETS, speedHint } from "./lib/qualityPresets";
+import FabricTabs from "./components/FabricTabs";
+import ForgeVisualizer from "./components/ForgeVisualizer";
 import type { Generation, HealthResponse, ProgressEvent, QualityPreset, Settings, Voice } from "./types";
 
 type View = "forge" | "library" | "history";
@@ -41,6 +43,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   disk_full: "Your disk is full. Free up some space and try again.",
   model_error: "Something went wrong with the voice engine. Try again, or restart the app if it keeps happening.",
   out_of_memory: "Your Mac ran out of available memory. Close some other apps and try again.",
+  permission_denied: "Foundry Vox doesn't have permission to write to the output folder. Check your system permissions.",
+  system_error: "A system error occurred. Try again, or restart the app if it keeps happening.",
+  no_space_left: "Your disk is full. Free up some space and try again.",
+  unable_to_open_database: "Your disk may be full or the database is locked. Free up some space and try again.",
 };
 
 const LOADING_TIPS = [
@@ -197,6 +203,10 @@ export default function App() {
   const previewUrlRef = useRef<string | null>(null);
   const generationAudioUrlsRef = useRef<Record<string, string>>({});
   const scriptImportRef = useRef<HTMLInputElement | null>(null);
+  const renderAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [renderPlaying, setRenderPlaying] = useState(false);
+  const [renderTime, setRenderTime] = useState(0);
+  const [renderDuration, setRenderDuration] = useState(0);
   const [generationAudioUrls, setGenerationAudioUrls] = useState<Record<string, string>>({});
   const [loadingTipIndex, setLoadingTipIndex] = useState(0);
 
@@ -384,13 +394,24 @@ export default function App() {
 
     recentGenerations.forEach((entry) => visibleEntries.set(entry.id, entry));
 
-    visibleEntries.forEach((entry) => {
-      if (!generationAudioUrlsRef.current[entry.id]) {
-        void ensureGenerationAudioUrl(entry).catch(() => {
-          // Leave the player empty if a blob fetch misses once.
-        });
+    // Load audio sequentially to avoid overwhelming IPC, with retry
+    let cancelled = false;
+    (async () => {
+      for (const entry of visibleEntries.values()) {
+        if (cancelled) break;
+        if (generationAudioUrlsRef.current[entry.id]) continue;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await ensureGenerationAudioUrl(entry);
+            break;
+          } catch {
+            if (attempt < 2) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+          }
+        }
       }
-    });
+    })();
+
+    return () => { cancelled = true; };
   }, [busy, filteredHistory, latestGeneration, recentGenerations, view]);
 
   // Rotate loading tips every 5 seconds while engine is not ready
@@ -617,11 +638,6 @@ export default function App() {
     <div className="app-frame">
       <header className="window-chrome">
         <div className="chrome-left">
-          <div className="traffic-lights" aria-hidden="true">
-            <span className="traffic close" />
-            <span className="traffic minimize" />
-            <span className="traffic zoom" />
-          </div>
           <div className="brand-lockup">
             <div className="brand-mark">F</div>
             <div>
@@ -631,17 +647,7 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="chrome-tabs">
-          {TOP_LEVEL_VIEWS.map((item) => (
-            <button
-              key={item.id}
-              className={`chrome-tab ${view === item.id ? "active" : ""}`}
-              onClick={() => setView(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+        <FabricTabs views={TOP_LEVEL_VIEWS} activeView={view} onViewChange={setView} />
 
         <div className="chrome-right">
           <div className="engine-pill">
@@ -671,14 +677,21 @@ export default function App() {
 
       <main className="workspace-shell">
         {error ? (
-          <section className="error-banner">
-            <strong>{health?.error ?? "Action needed"}</strong>
-            <p>{error}</p>
+          <section className={`error-banner ${error.includes("disk") ? "error-critical" : ""}`}>
+            <div className="error-content">
+              <strong>{error.includes("disk") ? "Disk full" : error.includes("memory") ? "Out of memory" : "Something went wrong"}</strong>
+              <p>{error}</p>
+            </div>
+            <button className="error-dismiss" onClick={() => setError("")} title="Dismiss">✕</button>
           </section>
         ) : null}
 
         {health && health.status !== "ready" ? (
           <section className={`setup-card ${health.status}`}>
+            <div className="engine-pulse-container">
+              <div className="engine-pulse" />
+              <div className="engine-pulse-ring" />
+            </div>
             <div className="setup-copy">
               <p className="eyebrow">Engine setup</p>
               <h2>{health.status === "warming_up" ? "Warming up..." : "Firing up the forge..."}</h2>
@@ -824,7 +837,11 @@ export default function App() {
                   </div>
                 </div>
 
-                <WaveformBars active={busy || Boolean(latestGeneration)} color={accentColor(selectedVoice)} />
+                <ForgeVisualizer
+                  state={busy ? "generating" : engineWarming ? "warming" : latestGeneration ? "complete" : "idle"}
+                  color={accentColor(selectedVoice)}
+                  progress={progress?.percent ?? 0}
+                />
 
                 {progress ? (
                   <div className="progress-block">
@@ -968,44 +985,70 @@ export default function App() {
                 ) : null}
               </article>
 
-              <article className="latest-render-card" style={{ ["--voice-accent" as string]: accentColor(selectedVoice) }}>
+              <article className="latest-render-card" style={{ ["--voice-accent" as string]: accentColor(latestGeneration ? voiceMap.get(latestGeneration.voice_id) : selectedVoice) }}>
+                {latestGeneration ? <div className="render-accent-bar" /> : null}
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">Latest render</p>
-                    <h3>{latestGeneration ? latestGeneration.voice_name : "Nothing forged yet"}</h3>
+                    <p className="eyebrow">{latestGeneration ? `${latestGeneration.voice_name} · ${(latestGeneration.quality ?? "balanced").toUpperCase()}` : "Latest render"}</p>
+                    <h3>{latestGeneration ? formatSeconds(latestGeneration.duration_seconds) + " of audio" : "Nothing forged yet"}</h3>
                   </div>
-                  {latestGeneration ? <span className="quality-badge">{formatSeconds(latestGeneration.duration_seconds)}</span> : null}
+                  {latestGeneration ? (
+                    <button
+                      className="micro-button accent"
+                      onClick={() => void handleSaveGeneration(latestGeneration)}
+                      title="Save to disk"
+                    >
+                      Save
+                    </button>
+                  ) : null}
                 </div>
 
                 {latestGeneration ? (
                   <>
-                    <MiniWaveform color={accentColor(voiceMap.get(latestGeneration.voice_id))} bars={30} />
+                    <div className="custom-player">
+                      <button
+                        className="player-play-btn"
+                        onClick={() => {
+                          const audio = renderAudioRef.current;
+                          if (!audio) return;
+                          if (renderPlaying) { audio.pause(); } else { void audio.play(); }
+                        }}
+                      >
+                        {renderPlaying ? "❚❚" : "▶"}
+                      </button>
+                      <input
+                        className="scrub-bar"
+                        type="range"
+                        min={0}
+                        max={renderDuration || 1}
+                        step={0.01}
+                        value={renderTime}
+                        onChange={(e) => {
+                          const audio = renderAudioRef.current;
+                          if (audio) audio.currentTime = Number(e.target.value);
+                          setRenderTime(Number(e.target.value));
+                        }}
+                        style={{ "--scrub-pct": `${renderDuration ? (renderTime / renderDuration) * 100 : 0}%` } as React.CSSProperties}
+                      />
+                      <span className="player-time">
+                        {formatSeconds(renderTime)} / {formatSeconds(renderDuration)}
+                      </span>
+                    </div>
                     <audio
-                      className="audio-player"
-                      controls
+                      ref={renderAudioRef}
                       src={generationAudioUrls[latestGeneration.id]}
+                      onPlay={() => setRenderPlaying(true)}
+                      onPause={() => setRenderPlaying(false)}
+                      onEnded={() => { setRenderPlaying(false); setRenderTime(0); }}
+                      onTimeUpdate={(e) => setRenderTime((e.target as HTMLAudioElement).currentTime)}
+                      onLoadedMetadata={(e) => setRenderDuration((e.target as HTMLAudioElement).duration)}
+                      style={{ display: "none" }}
                     />
-                    <div className="metrics-grid">
-                      <div title="Real-time factor — how many seconds of processing per second of audio. Lower is faster.">
-                        <span>RTF</span>
-                        <strong>{latestGeneration.rtf.toFixed(1)}x</strong>
-                      </div>
-                      <div>
-                        <span>Quality</span>
-                        <strong>{latestGeneration.quality ?? "balanced"}</strong>
-                      </div>
-                      <div>
-                        <span>Forge time</span>
-                        <strong>{formatSeconds(latestGeneration.generation_time_seconds)}</strong>
-                      </div>
-                      <div>
-                        <span>Format</span>
-                        <strong>{latestGeneration.format.toUpperCase()}</strong>
-                      </div>
-                      <div>
-                        <span>Created</span>
-                        <strong>{relativeDate(latestGeneration.created_at)}</strong>
-                      </div>
+                    <div className="metrics-row">
+                      <span title="Real-time factor — lower is faster">{latestGeneration.rtf.toFixed(1)}x RTF</span>
+                      <span>{formatSeconds(latestGeneration.generation_time_seconds)} forge</span>
+                      <span>{latestGeneration.format.toUpperCase()}</span>
+                      <span>{relativeDate(latestGeneration.created_at)}</span>
                     </div>
                   </>
                 ) : (
