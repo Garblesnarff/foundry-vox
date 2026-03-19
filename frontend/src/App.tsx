@@ -3,7 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
-import type { Generation, HealthResponse, ProgressEvent, Settings, Voice } from "./types";
+import { QUALITY_PRESETS, speedHint } from "./lib/qualityPresets";
+import type { Generation, HealthResponse, ProgressEvent, QualityPreset, Settings, Voice } from "./types";
 
 type View = "forge" | "library" | "history";
 type LibraryFilter = "all" | "preset" | "clone";
@@ -171,6 +172,7 @@ export default function App() {
   const [text, setText] = useState(
     "The forge burns brightest at midnight. Every voice begins as raw metal, waiting for its final shape.",
   );
+  const [selectedQuality, setSelectedQuality] = useState<QualityPreset>("balanced");
 
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [error, setError] = useState<string>("");
@@ -436,6 +438,7 @@ export default function App() {
         system_prompt: null,
         format: settings.output_format,
         sample_rate: settings.sample_rate,
+        quality: selectedQuality,
       });
       setHistory((current) => {
         const withoutDuplicate = current.filter((entry) => entry.id !== response.generation.id);
@@ -891,6 +894,40 @@ export default function App() {
                   </select>
                 </label>
 
+                <div className="quality-control">
+                  <div className="quality-control-head">
+                    <span>Quality preset</span>
+                    <span className="quality-control-note">Higher quality is slower</span>
+                  </div>
+                  <div className="quality-picker" role="radiogroup" aria-label="Generation quality preset">
+                    {QUALITY_PRESETS.map((preset) => {
+                      const selected = selectedQuality === preset.key;
+                      return (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          className={`quality-chip ${selected ? "selected" : ""}`}
+                          title={`${preset.description} • ${speedHint(preset.expected_rtf)} • ${preset.steps} diffusion steps`}
+                          onClick={() => setSelectedQuality(preset.key)}
+                        >
+                          <strong>{preset.label}</strong>
+                          <span>{speedHint(preset.expected_rtf)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="field-help">
+                    <strong>{QUALITY_PRESETS.find((preset) => preset.key === selectedQuality)?.label ?? "Balanced"}</strong>
+                    {" "}
+                    uses{" "}
+                    {QUALITY_PRESETS.find((preset) => preset.key === selectedQuality)?.steps ?? 3}
+                    {" "}
+                    diffusion steps.
+                  </p>
+                </div>
+
                 {firstRenderMayBeSlower ? (
                   <div className="first-gen-inline-notice">
                     <span className="first-gen-inline-icon">⏱</span>
@@ -952,6 +989,10 @@ export default function App() {
                       <div title="Real-time factor — how many seconds of processing per second of audio. Lower is faster.">
                         <span>RTF</span>
                         <strong>{latestGeneration.rtf.toFixed(1)}x</strong>
+                      </div>
+                      <div>
+                        <span>Quality</span>
+                        <strong>{latestGeneration.quality ?? "balanced"}</strong>
                       </div>
                       <div>
                         <span>Forge time</span>
@@ -1256,6 +1297,7 @@ export default function App() {
                           <i style={{ ["--voice-accent" as string]: color }} />
                           {entry.voice_name}
                         </span>
+                        <span>{entry.quality ?? "balanced"}</span>
                         <span>{formatSeconds(entry.duration_seconds)}</span>
                         <span>{entry.rtf.toFixed(1)}x RTF</span>
                         <span>{entry.format.toUpperCase()}</span>

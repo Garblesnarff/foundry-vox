@@ -91,6 +91,7 @@ async def generate_speech(request: Request, payload: GenerationRequest) -> Gener
                 reference_audio_path=voice_audio_path,
                 reference_text=voice.reference_text,
                 system_prompt=payload.system_prompt,
+                quality=payload.quality,
             )
             services.engine.mark_voice_warmed(voice.id)
             await services.progress.publish("progress", ProgressEvent(status="decoding", percent=90))
@@ -120,6 +121,7 @@ async def generate_speech(request: Request, payload: GenerationRequest) -> Gener
                     "text": payload.text,
                     "voice_id": voice.id,
                     "voice_name": voice.name,
+                    "quality": payload.quality,
                     "system_prompt": payload.system_prompt,
                     "output_path": str(output_path.resolve()),
                     "format": output_format,

@@ -45,4 +45,27 @@ def test_seeded_voices_and_generation(tmp_path: Path) -> None:
         assert generation.status_code == 200
         payload = generation.json()["generation"]
         assert payload["voice_id"] == voices[0]["id"]
+        assert payload["quality"] == "balanced"
         assert Path(payload["output_path"]).exists()
+
+        draft_generation = client.post(
+            "/api/v1/generate",
+            json={
+                "text": "Draft quality test.",
+                "voice_id": voices[0]["id"],
+                "quality": "draft",
+            },
+        )
+        assert draft_generation.status_code == 200
+        assert draft_generation.json()["generation"]["quality"] == "draft"
+
+        studio_generation = client.post(
+            "/api/v1/generate",
+            json={
+                "text": "Studio quality test.",
+                "voice_id": voices[0]["id"],
+                "quality": "studio",
+            },
+        )
+        assert studio_generation.status_code == 200
+        assert studio_generation.json()["generation"]["quality"] == "studio"

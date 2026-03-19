@@ -1,5 +1,6 @@
 export type VoiceType = "preset" | "clone";
 export type AudioFormat = "wav" | "mp3" | "aac";
+export type QualityPreset = "draft" | "balanced" | "quality" | "studio";
 export type HealthStatus = "loading" | "warming_up" | "ready" | "generating" | "error";
 
 export interface Voice {
@@ -37,6 +38,7 @@ export interface Generation {
   text: string;
   voice_id: string;
   voice_name: string;
+  quality?: QualityPreset | null;
   system_prompt: string | null;
   output_path: string;
   format: AudioFormat;

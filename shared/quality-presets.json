@@ -1,0 +1,38 @@
+[
+  {
+    "key": "draft",
+    "label": "Draft",
+    "steps": 2,
+    "cfg_scale": 2.0,
+    "noise_temperature": 0.6,
+    "expected_rtf": 0.5,
+    "description": "Fast previews"
+  },
+  {
+    "key": "balanced",
+    "label": "Balanced",
+    "steps": 3,
+    "cfg_scale": 2.0,
+    "noise_temperature": 0.7,
+    "expected_rtf": 0.7,
+    "description": "Good quality, still fast"
+  },
+  {
+    "key": "quality",
+    "label": "Quality",
+    "steps": 5,
+    "cfg_scale": 2.0,
+    "noise_temperature": 0.7,
+    "expected_rtf": 1.0,
+    "description": "High fidelity"
+  },
+  {
+    "key": "studio",
+    "label": "Studio",
+    "steps": 10,
+    "cfg_scale": 1.6,
+    "noise_temperature": 0.9,
+    "expected_rtf": 1.9,
+    "description": "Maximum quality"
+  }
+]

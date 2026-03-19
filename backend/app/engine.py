@@ -12,6 +12,7 @@ from typing import Any
 from pydub import AudioSegment
 
 from .errors import ApiError
+from .quality_presets import DEFAULT_QUALITY_PRESET, quality_preset_map
 
 logger = logging.getLogger(__name__)
 
@@ -227,20 +228,21 @@ class TadaEngine:
             num_acoustic_candidates=1,
         )
 
-    def _mlx_generate_config(self) -> Any:
-        """Build MLX GenerateConfig with optimized settings (2 flow steps, CFG 2.0)."""
+    def _mlx_generate_config(self, quality: str = DEFAULT_QUALITY_PRESET) -> Any:
+        """Build MLX GenerateConfig for the selected quality tier."""
         from .mlx_tada.generate import GenerateConfig
 
+        preset = quality_preset_map().get(quality, quality_preset_map()[DEFAULT_QUALITY_PRESET])
         return GenerateConfig(
             text_do_sample=False,
             text_temperature=0.6,
             text_top_k=0,
             text_top_p=0.9,
-            acoustic_cfg_scale=2.0,
+            acoustic_cfg_scale=preset["cfg_scale"],
             duration_cfg_scale=1.0,
             cfg_schedule="constant",
-            noise_temperature=0.6,
-            num_flow_matching_steps=2,
+            noise_temperature=preset["noise_temperature"],
+            num_flow_matching_steps=preset["steps"],
             time_schedule="logsnr",
             num_acoustic_candidates=1,
             negative_condition_source="negative_step_output",
@@ -503,6 +505,7 @@ class TadaEngine:
         reference_audio_path: Path,
         reference_text: str | None,
         system_prompt: str | None,
+        quality: str = DEFAULT_QUALITY_PRESET,
     ) -> dict[str, Any]:
         if self.generating:
             raise ApiError(
@@ -520,6 +523,7 @@ class TadaEngine:
                     reference_audio_path,
                     reference_text,
                     system_prompt,
+                    quality,
                 )
 
             return await asyncio.to_thread(
@@ -528,6 +532,7 @@ class TadaEngine:
                 reference_audio_path,
                 reference_text,
                 system_prompt,
+                quality,
             )
         except MemoryError as exc:
             raise ApiError(
@@ -566,6 +571,7 @@ class TadaEngine:
         reference_audio_path: Path,
         reference_text: str | None,
         system_prompt: str | None,
+        quality: str = DEFAULT_QUALITY_PRESET,
     ) -> dict[str, Any]:
         assert self._torchaudio is not None
         assert self._torch is not None
@@ -575,7 +581,7 @@ class TadaEngine:
         encode_time = time.perf_counter() - encode_start
 
         if self._use_mlx:
-            result = self._generate_mlx_wav_sync(prompt, text, system_prompt)
+            result = self._generate_mlx_wav_sync(prompt, text, system_prompt, quality)
         else:
             result = self._generate_pytorch_wav_sync(prompt, text, system_prompt)
 
@@ -595,6 +601,7 @@ class TadaEngine:
         prompt: Any,
         text: str,
         system_prompt: str | None,
+        quality: str = DEFAULT_QUALITY_PRESET,
     ) -> dict[str, Any]:
         """Generate audio using MLX hybrid pipeline."""
         assert self._mlx_core is not None
@@ -607,7 +614,7 @@ class TadaEngine:
             text=text,
             num_transition_steps=5,
             system_prompt=system_prompt,
-            config=self._mlx_generate_config(),
+            config=self._mlx_generate_config(quality),
             decoder=self._decoder,
             device=self._torch_device,
             dtype=self._torch.float32,

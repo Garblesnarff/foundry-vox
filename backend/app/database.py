@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS generations (
     text TEXT NOT NULL,
     voice_id TEXT NOT NULL,
     voice_name TEXT NOT NULL,
+    quality TEXT,
     system_prompt TEXT,
     output_path TEXT NOT NULL,
     format TEXT NOT NULL,
@@ -61,12 +62,19 @@ class Database:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
+            await self._migrate(db)
             for key, value in DEFAULT_SETTINGS.items():
                 await db.execute(
                     "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
                     (key, value),
                 )
             await db.commit()
+
+    async def _migrate(self, db: aiosqlite.Connection) -> None:
+        columns = await self._fetchall(db, "PRAGMA table_info(generations)")
+        generation_columns = {column[1] for column in columns}
+        if "quality" not in generation_columns:
+            await db.execute("ALTER TABLE generations ADD COLUMN quality TEXT")
 
     async def _fetchone(
         self, db: aiosqlite.Connection, query: str, params: tuple[Any, ...] = ()
@@ -229,16 +237,17 @@ class Database:
             await db.execute(
                 """
                 INSERT INTO generations (
-                    id, text, voice_id, voice_name, system_prompt, output_path,
+                    id, text, voice_id, voice_name, quality, system_prompt, output_path,
                     format, sample_rate, duration_seconds, generation_time_seconds,
                     rtf, char_count, word_count, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     generation["id"],
                     generation["text"],
                     generation["voice_id"],
                     generation["voice_name"],
+                    generation.get("quality"),
                     generation.get("system_prompt"),
                     generation["output_path"],
                     generation["format"],

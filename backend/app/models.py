@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 VoiceType = Literal["preset", "clone"]
 AudioFormat = Literal["wav", "mp3", "aac"]
+QualityPreset = Literal["draft", "balanced", "quality", "studio"]
 SortMode = Literal["newest", "oldest", "longest", "shortest"]
 HealthStatus = Literal["loading", "warming_up", "ready", "generating", "error"]
 
@@ -63,6 +64,7 @@ class GenerationRequest(BaseModel):
     system_prompt: str | None = None
     format: AudioFormat | None = None
     sample_rate: int | None = None
+    quality: QualityPreset = "balanced"
 
     @field_validator("text")
     @classmethod
@@ -79,6 +81,7 @@ class GenerationRecord(BaseModel):
     text: str
     voice_id: str
     voice_name: str
+    quality: QualityPreset | None = None
     system_prompt: str | None = None
     output_path: str
     format: AudioFormat
@@ -213,6 +216,7 @@ def generation_from_row(row: dict[str, Any]) -> GenerationRecord:
         text=row["text"],
         voice_id=row["voice_id"],
         voice_name=row["voice_name"],
+        quality=row.get("quality"),
         system_prompt=row.get("system_prompt"),
         output_path=row["output_path"],
         format=row["format"],

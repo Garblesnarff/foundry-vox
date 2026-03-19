@@ -69,21 +69,8 @@ def local_snapshot_dir(models_dir: Path, repo_id: str) -> Path:
     return snapshot_dirs[-1]
 
 
-def build_config() -> GenerateConfig:
-    return GenerateConfig(
-        text_do_sample=False,
-        text_temperature=0.6,
-        text_top_k=0,
-        text_top_p=0.9,
-        acoustic_cfg_scale=2.0,
-        duration_cfg_scale=1.0,
-        cfg_schedule="constant",
-        noise_temperature=0.6,
-        num_flow_matching_steps=2,
-        time_schedule="logsnr",
-        num_acoustic_candidates=1,
-        negative_condition_source="negative_step_output",
-    )
+def build_config(baseline: dict[str, object]) -> GenerateConfig:
+    return GenerateConfig(**baseline["generate_config"])
 
 
 def load_baseline(path: Path) -> dict[str, object]:
@@ -144,7 +131,7 @@ def main() -> None:
     baseline = load_baseline(args.baseline_file)
 
     mx.random.seed(42)
-    config = build_config()
+    config = build_config(baseline)
 
     if not args.skip_checks:
         audit_generate_config(paths, baseline)
