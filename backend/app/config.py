@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 APP_NAME = "Foundry Vox"
+# Tauri uses the bundle identifier for the macOS app data directory
+BUNDLE_ID = "com.foundry.vox"
 API_PREFIX = "/api/v1"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = int(os.getenv("FOUNDRY_VOX_PORT", "3456"))
@@ -18,7 +20,7 @@ def _default_app_home() -> Path:
 
     home = Path.home()
     if sys.platform == "darwin":
-        return (home / "Library" / "Application Support" / APP_NAME).resolve()
+        return (home / "Library" / "Application Support" / BUNDLE_ID).resolve()
     if os.name == "nt":
         appdata = os.getenv("LOCALAPPDATA")
         if appdata:
