@@ -452,6 +452,15 @@ input::placeholder {
   overflow: clip;
 }
 
+/* Control card needs visible overflow for quality grid sizing */
+.control-card,
+.latest-render-card,
+.recent-forges-card,
+.session-card,
+.forge-script-card {
+  overflow: visible;
+}
+
 .forge-script-card::before,
 .forge-wave-card::before,
 .control-card::before,
@@ -856,9 +865,15 @@ input::placeholder {
 .forge-stage {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 16px;
   overflow: hidden;
   min-height: 0;
+}
+
+.forge-stage > * {
+  border-radius: 0;
 }
 
 .forge-script-card,
@@ -1199,7 +1214,14 @@ input::placeholder {
 .forge-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.forge-sidebar > * {
+  border-radius: 0;
 }
 
 .control-field {
