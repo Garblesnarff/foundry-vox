@@ -636,6 +636,21 @@ export default function App() {
 
   return (
     <div className="app-frame">
+      {/* Hidden SVG filter — Damascus steel organic turbulence pattern */}
+      <svg aria-hidden="true" style={{ position: "absolute", width: 0, height: 0 }}>
+        <defs>
+          <filter id="damascus" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.004 0.012" numOctaves="6" seed="3" stitchTiles="stitch" result="noise" />
+            <feColorMatrix type="saturate" values="0" in="noise" result="mono" />
+            <feComponentTransfer in="mono" result="contrast">
+              <feFuncR type="linear" slope="3" intercept="-0.8" />
+              <feFuncG type="linear" slope="3" intercept="-0.8" />
+              <feFuncB type="linear" slope="3" intercept="-0.8" />
+              <feFuncA type="linear" slope="1" intercept="0" />
+            </feComponentTransfer>
+          </filter>
+        </defs>
+      </svg>
       <header className="window-chrome">
         <div className="chrome-left">
           <div className="brand-lockup">
