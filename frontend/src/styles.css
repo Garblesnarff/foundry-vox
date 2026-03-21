@@ -449,16 +449,7 @@ input::placeholder {
 .modal-card,
 .setup-card {
   position: relative;
-}
-
-/* Only clip overflow where needed for the texture — not on layout-sensitive cards */
-.forge-wave-card,
-.voice-card,
-.history-card,
-.stat-card,
-.modal-card,
-.setup-card {
-  overflow: hidden;
+  overflow: clip;
 }
 
 .forge-script-card::before,
