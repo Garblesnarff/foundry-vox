@@ -908,20 +908,6 @@ export default function App() {
                   ) : null}
                 </label>
 
-                <label className="control-field">
-                  <span>Output format</span>
-                  <select
-                    value={settings.output_format}
-                    onChange={(event) => {
-                      void handleSaveSettings({ output_format: event.target.value as Settings["output_format"] });
-                    }}
-                  >
-                    <option value="wav">WAV</option>
-                    <option value="mp3">MP3</option>
-                    <option value="aac">AAC</option>
-                  </select>
-                </label>
-
                 <div className="quality-control">
                   <div className="quality-control-head">
                     <span>Quality preset</span>
