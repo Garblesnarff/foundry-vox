@@ -115,7 +115,7 @@ input::placeholder {
   padding: 0 20px;
   border-bottom: 1px solid var(--border);
   background:
-    linear-gradient(180deg, rgba(18, 20, 22, 0.98), rgba(16, 18, 20, 0.94)),
+    linear-gradient(180deg, #141618, #12141a),
     radial-gradient(circle at top center, rgba(232, 168, 73, 0.06), transparent 32%);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -578,7 +578,7 @@ input::placeholder {
   display: grid;
   gap: 14px;
   background:
-    linear-gradient(180deg, rgba(22, 24, 26, 0.98), rgba(18, 20, 22, 0.95)),
+    linear-gradient(180deg, #1a1c1e, #161819),
     radial-gradient(circle at top right, rgba(232, 168, 73, 0.06), transparent 30%);
 }
 
@@ -763,7 +763,7 @@ input::placeholder {
   padding: 16px;
   border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(14, 16, 18, 0.98), rgba(12, 14, 16, 0.96)),
+    linear-gradient(180deg, #131517, #111314),
     radial-gradient(circle at top center, rgba(232, 168, 73, 0.04), transparent 34%);
 }
 
@@ -865,15 +865,9 @@ input::placeholder {
 .forge-stage {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 1px;
-  background: var(--border);
-  border-radius: 16px;
+  gap: 18px;
   overflow: hidden;
   min-height: 0;
-}
-
-.forge-stage > * {
-  border-radius: 0;
 }
 
 .forge-script-card,
@@ -1021,13 +1015,13 @@ input::placeholder {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(20, 22, 24, 0.96), rgba(16, 18, 20, 0.96)),
+    linear-gradient(180deg, #161819, #14161a),
     radial-gradient(circle at top right, rgba(232, 168, 73, 0.06), transparent 34%);
 }
 
 .forge-wave-card.active {
   background:
-    linear-gradient(180deg, rgba(20, 22, 24, 0.96), rgba(16, 18, 20, 0.96)),
+    linear-gradient(180deg, #161819, #14161a),
     radial-gradient(circle at top right, rgba(232, 168, 73, 0.06), transparent 34%);
   box-shadow:
     var(--shadow),
@@ -1201,7 +1195,7 @@ input::placeholder {
 .session-card,
 .voice-detail-panel {
   background:
-    linear-gradient(180deg, rgba(22, 24, 26, 0.98), rgba(18, 20, 22, 0.95)),
+    linear-gradient(180deg, #1a1c1e, #161819),
     radial-gradient(circle at top center, rgba(232, 168, 73, 0.04), transparent 34%);
 }
 
@@ -1214,14 +1208,7 @@ input::placeholder {
 .forge-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  background: var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.forge-sidebar > * {
-  border-radius: 0;
+  gap: 14px;
 }
 
 .control-field {
@@ -1356,7 +1343,7 @@ input::placeholder {
   border-radius: 12px;
   background:
     var(--damascus-bands),
-    linear-gradient(180deg, rgba(24, 21, 18, 0.95), rgba(20, 18, 15, 0.9));
+    linear-gradient(180deg, #1a1c1e, #161819);
   border: 1px solid var(--border);
   box-shadow: var(--fold-edge);
 }
@@ -1639,7 +1626,7 @@ input::placeholder {
   gap: 12px;
   cursor: pointer;
   background:
-    linear-gradient(180deg, rgba(22, 24, 26, 0.98), rgba(20, 22, 24, 0.95)),
+    linear-gradient(180deg, #1a1c1e, #161819),
     radial-gradient(circle at top right, color-mix(in srgb, var(--voice-accent) 10%, transparent), transparent 40%);
   border-color: color-mix(in srgb, var(--voice-accent) 22%, var(--border));
 }
@@ -1730,7 +1717,7 @@ input::placeholder {
   padding: 16px;
   border-radius: 14px;
   background:
-    linear-gradient(180deg, rgba(22, 24, 26, 0.98), rgba(20, 22, 24, 0.95)),
+    linear-gradient(180deg, #1a1c1e, #161819),
     radial-gradient(circle at top right, color-mix(in srgb, var(--voice-accent) 8%, transparent), transparent 34%);
 }
 
@@ -1859,7 +1846,7 @@ input::placeholder {
   border-radius: 18px;
   padding: 20px;
   background:
-    linear-gradient(180deg, rgba(18, 20, 22, 0.98), rgba(14, 16, 18, 0.98)),
+    linear-gradient(180deg, #141618, #111315),
     radial-gradient(circle at top right, rgba(232, 168, 73, 0.06), transparent 30%);
 }
 
@@ -1887,7 +1874,7 @@ input::placeholder {
   overflow: auto;
   border-left: 1px solid var(--border);
   background:
-    linear-gradient(180deg, rgba(22, 24, 26, 0.98), rgba(18, 20, 22, 0.98)),
+    linear-gradient(180deg, #1a1c1e, #161819),
     radial-gradient(circle at top right, rgba(232, 168, 73, 0.06), transparent 32%);
   box-shadow: -22px 0 60px rgba(0, 0, 0, 0.34), var(--fold-edge);
 }
