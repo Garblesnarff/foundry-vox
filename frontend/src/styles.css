@@ -1,11 +1,11 @@
 :root {
   color: #f0e6d6;
   background:
-    radial-gradient(circle at top left, rgba(232, 168, 73, 0.08), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(100, 110, 120, 0.08), transparent 24%),
-    linear-gradient(180deg, #121416 0%, #0e1012 100%);
+    radial-gradient(circle at top left, rgba(232, 168, 73, 0.06), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(100, 110, 120, 0.06), transparent 24%),
+    #151719;
   font-family: "Avenir Next", "Helvetica Neue", sans-serif;
-  --bg: #121416;
+  --bg: #151719;
   --panel: #181a1c;
   --panel-2: #1c1e20;
   --panel-3: #141618;
