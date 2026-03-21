@@ -436,13 +436,9 @@ input::placeholder {
   box-shadow: var(--shadow), var(--fold-edge);
 }
 
-/* Damascus steel organic texture via SVG feTurbulence */
-.forge-script-card,
+/* Damascus steel organic texture via SVG feTurbulence.
+   Only applied to cards that can safely use overflow: clip. */
 .forge-wave-card,
-.control-card,
-.latest-render-card,
-.recent-forges-card,
-.session-card,
 .voice-card,
 .history-card,
 .stat-card,
@@ -452,21 +448,7 @@ input::placeholder {
   overflow: clip;
 }
 
-/* Control card needs visible overflow for quality grid sizing */
-.control-card,
-.latest-render-card,
-.recent-forges-card,
-.session-card,
-.forge-script-card {
-  overflow: visible;
-}
-
-.forge-script-card::before,
 .forge-wave-card::before,
-.control-card::before,
-.latest-render-card::before,
-.recent-forges-card::before,
-.session-card::before,
 .voice-card::before,
 .history-card::before,
 .stat-card::before,
@@ -483,12 +465,7 @@ input::placeholder {
   z-index: 0;
 }
 
-.forge-script-card > *,
 .forge-wave-card > *,
-.control-card > *,
-.latest-render-card > *,
-.recent-forges-card > *,
-.session-card > *,
 .voice-card > *,
 .history-card > *,
 .stat-card > *,
