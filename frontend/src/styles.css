@@ -475,6 +475,7 @@ input::placeholder {
   content: "";
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   filter: url(#damascus);
   background: linear-gradient(160deg, rgba(180, 190, 200, 0.06), rgba(120, 130, 140, 0.03));
   mix-blend-mode: overlay;
