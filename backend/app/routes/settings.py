@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, Request
 
@@ -44,7 +45,27 @@ async def patch_settings(request: Request, payload: PatchSettingsRequest) -> Set
             )
 
     if "output_directory" in changes:
-        changes.pop("output_directory")
+        raw_path = str(changes["output_directory"]).strip()
+        if not raw_path:
+            changes["output_directory"] = default_output_directory()
+        else:
+            expanded = str(Path(raw_path).expanduser().resolve())
+            target = Path(expanded)
+            try:
+                target.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                raise ApiError(
+                    "invalid_setting",
+                    f"Cannot create directory: {exc}",
+                    400,
+                ) from exc
+            if not os.access(target, os.W_OK):
+                raise ApiError(
+                    "permission_denied",
+                    f"Directory is not writable: {expanded}",
+                    400,
+                )
+            changes["output_directory"] = expanded
 
     new_values = {
         key: str(value).lower() if isinstance(value, bool) else str(value)

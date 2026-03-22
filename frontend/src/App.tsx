@@ -186,6 +186,8 @@ export default function App() {
   const [cloneOpen, setCloneOpen] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showAboutPanel, setShowAboutPanel] = useState(false);
+  const [editingStoragePath, setEditingStoragePath] = useState(false);
+  const [storageDraft, setStorageDraft] = useState("");
   const [cloneName, setCloneName] = useState("");
   const [cloneTranscript, setCloneTranscript] = useState("");
   const [cloneGender, setCloneGender] = useState("O");
@@ -1509,12 +1511,73 @@ export default function App() {
               <p className="settings-section-label">Storage</p>
               <div className="settings-block">
                 <div className="settings-row">
-                  <span className="settings-label">Data location</span>
+                  <span className="settings-label">Output location</span>
+                  {editingStoragePath ? (
+                    <button
+                      className="micro-button"
+                      onClick={() => setEditingStoragePath(false)}
+                    >
+                      Cancel
+                    </button>
+                  ) : (
+                    <button
+                      className="micro-button"
+                      onClick={() => {
+                        setStorageDraft(settings.output_directory);
+                        setEditingStoragePath(true);
+                      }}
+                    >
+                      Change
+                    </button>
+                  )}
                 </div>
-                <p className="settings-path">{settings.output_directory}</p>
+                {editingStoragePath ? (
+                  <div className="settings-path-edit">
+                    <input
+                      className="settings-path-input"
+                      value={storageDraft}
+                      onChange={(event) => setStorageDraft(event.target.value)}
+                      placeholder="/path/to/output/directory"
+                      autoFocus
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          void handleSaveSettings({ output_directory: storageDraft } as Partial<Settings>).then(() => {
+                            setEditingStoragePath(false);
+                          });
+                        } else if (event.key === "Escape") {
+                          setEditingStoragePath(false);
+                        }
+                      }}
+                    />
+                    <div className="settings-path-actions">
+                      <button
+                        className="micro-button accent"
+                        onClick={() => {
+                          void handleSaveSettings({ output_directory: storageDraft } as Partial<Settings>).then(() => {
+                            setEditingStoragePath(false);
+                          });
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="micro-button"
+                        onClick={() => {
+                          void handleSaveSettings({ output_directory: "" } as Partial<Settings>).then(() => {
+                            setEditingStoragePath(false);
+                          });
+                        }}
+                      >
+                        Reset to default
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="settings-path">{settings.output_directory}</p>
+                )}
               </div>
               <p className="field-help">
-                Generated audio is stored inside the app container. Use Save or Export to copy files to another location.
+                New generations will be saved to this directory. Existing files stay where they were created.
               </p>
             </section>
 
