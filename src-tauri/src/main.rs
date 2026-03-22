@@ -12,6 +12,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::time::sleep;
 use uuid::Uuid;
@@ -162,6 +163,16 @@ async fn backend_get_health(
     client: State<'_, BackendClient>,
 ) -> Result<Value, String> {
     backend_request(&runtime, &client, Method::GET, "/health", None).await
+}
+
+#[tauri::command]
+async fn pick_output_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("Choose output directory")
+        .blocking_pick_folder();
+    Ok(picked.map(|path| path.to_string()))
 }
 
 #[tauri::command]
@@ -759,7 +770,8 @@ fn main() {
             backend_get_voice_preview,
             backend_warmup_voice,
             start_progress_bridge,
-            stop_progress_bridge
+            stop_progress_bridge,
+            pick_output_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running Foundry Vox");

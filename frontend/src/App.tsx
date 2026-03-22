@@ -186,8 +186,6 @@ export default function App() {
   const [cloneOpen, setCloneOpen] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showAboutPanel, setShowAboutPanel] = useState(false);
-  const [editingStoragePath, setEditingStoragePath] = useState(false);
-  const [storageDraft, setStorageDraft] = useState("");
   const [cloneName, setCloneName] = useState("");
   const [cloneTranscript, setCloneTranscript] = useState("");
   const [cloneGender, setCloneGender] = useState("O");
@@ -1512,72 +1510,40 @@ export default function App() {
               <div className="settings-block">
                 <div className="settings-row">
                   <span className="settings-label">Output location</span>
-                  {editingStoragePath ? (
+                  <div className="settings-path-buttons">
                     <button
                       className="micro-button"
-                      onClick={() => setEditingStoragePath(false)}
-                    >
-                      Cancel
-                    </button>
-                  ) : (
-                    <button
-                      className="micro-button"
-                      onClick={() => {
-                        setStorageDraft(settings.output_directory);
-                        setEditingStoragePath(true);
+                      onClick={async () => {
+                        try {
+                          const picked = await api.pickOutputDirectory();
+                          if (picked) {
+                            void handleSaveSettings({ output_directory: picked } as Partial<Settings>);
+                          }
+                        } catch {
+                          // Dialog cancelled or unavailable — fall back to manual entry
+                          const path = window.prompt("Enter output directory path:", settings.output_directory);
+                          if (path !== null) {
+                            void handleSaveSettings({ output_directory: path } as Partial<Settings>);
+                          }
+                        }
                       }}
                     >
                       Change
                     </button>
-                  )}
-                </div>
-                {editingStoragePath ? (
-                  <div className="settings-path-edit">
-                    <input
-                      className="settings-path-input"
-                      value={storageDraft}
-                      onChange={(event) => setStorageDraft(event.target.value)}
-                      placeholder="/path/to/output/directory"
-                      autoFocus
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          void handleSaveSettings({ output_directory: storageDraft } as Partial<Settings>).then(() => {
-                            setEditingStoragePath(false);
-                          });
-                        } else if (event.key === "Escape") {
-                          setEditingStoragePath(false);
-                        }
-                      }}
-                    />
-                    <div className="settings-path-actions">
-                      <button
-                        className="micro-button accent"
-                        onClick={() => {
-                          void handleSaveSettings({ output_directory: storageDraft } as Partial<Settings>).then(() => {
-                            setEditingStoragePath(false);
-                          });
-                        }}
-                      >
-                        Save
-                      </button>
+                    {settings.output_directory !== DEFAULT_SETTINGS.output_directory ? (
                       <button
                         className="micro-button"
-                        onClick={() => {
-                          void handleSaveSettings({ output_directory: "" } as Partial<Settings>).then(() => {
-                            setEditingStoragePath(false);
-                          });
-                        }}
+                        onClick={() => void handleSaveSettings({ output_directory: "" } as Partial<Settings>)}
                       >
-                        Reset to default
+                        Reset
                       </button>
-                    </div>
+                    ) : null}
                   </div>
-                ) : (
-                  <p className="settings-path">{settings.output_directory}</p>
-                )}
+                </div>
+                <p className="settings-path">{settings.output_directory}</p>
               </div>
               <p className="field-help">
-                New generations will be saved to this directory. Existing files stay where they were created.
+                New generations will be saved here. Existing files stay where they were created.
               </p>
             </section>
 

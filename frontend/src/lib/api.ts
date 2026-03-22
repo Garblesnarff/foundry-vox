@@ -103,6 +103,7 @@ export const api = {
     format: "wav" | "mp3" | "aac";
     pause_seconds?: number;
   }) => invokeBackend<BinaryResponse>("backend_export_batch", { payload }),
+  pickOutputDirectory: () => invoke<string | null>("pick_output_directory"),
   progressStream: async (onEvent: (event: ProgressEvent, type: string) => void) => {
     const unlistenProgress = await listen<ProgressBridgeEvent>("backend://progress", (event) => {
       if (typeof event.payload.payload === "string") {

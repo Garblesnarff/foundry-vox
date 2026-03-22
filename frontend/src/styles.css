@@ -1935,33 +1935,9 @@ input::placeholder {
   line-height: 1.5;
 }
 
-.settings-path-edit {
-  padding: 0 14px 12px;
+.settings-path-buttons {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.settings-path-input {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-family: "SF Mono", "JetBrains Mono", monospace;
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(200, 160, 100, 0.15);
-  border-radius: 6px;
-}
-
-.settings-path-input:focus {
-  border-color: rgba(232, 168, 73, 0.45);
-  box-shadow: 0 0 0 3px rgba(232, 168, 73, 0.08);
-  outline: none;
-}
-
-.settings-path-actions {
-  display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .about-page {
