@@ -1450,41 +1450,8 @@ export default function App() {
             </div>
 
             <section className="settings-section">
-              <p className="settings-section-label">Engine</p>
+              <p className="settings-section-label">Generation</p>
               <div className="settings-block">
-                <div className="settings-row">
-                  <span className="settings-label">Model</span>
-                  <div className="toggle-group">
-                    {[
-                      { id: "tada-1b", label: "1B" },
-                      { id: "tada-3b", label: "3B" },
-                    ].map((model) => (
-                      <button
-                        key={model.id}
-                        className={`toggle-button ${settings.model === model.id ? "active" : ""}`}
-                        onClick={() => void handleSaveSettings({ model: model.id as Settings["model"] })}
-                      >
-                        {model.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="settings-row">
-                  <span className="settings-label">CPU threads</span>
-                  <div className="settings-slider-group">
-                    <input
-                      className="thread-slider"
-                      type="range"
-                      min={1}
-                      max={16}
-                      value={settings.cpu_threads}
-                      onChange={(event) => setSettings((current) => ({ ...current, cpu_threads: Number(event.target.value) }))}
-                      onMouseUp={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
-                      onTouchEnd={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
-                    />
-                    <strong className="settings-slider-value">{settings.cpu_threads}</strong>
-                  </div>
-                </div>
                 <div className="settings-row">
                   <span className="settings-label">Warmup on launch</span>
                   <select
@@ -1497,6 +1464,9 @@ export default function App() {
                   </select>
                 </div>
               </div>
+              <p className="field-help">
+                Warmup primes the default voice at launch so your first generation starts faster.
+              </p>
             </section>
 
             <section className="settings-section">
@@ -1516,34 +1486,22 @@ export default function App() {
                     ))}
                   </select>
                 </div>
-                <div className="settings-row">
-                  <span className="settings-label">Sample rate</span>
-                  <select
-                    className="settings-inline-select"
-                    value={settings.sample_rate}
-                    onChange={(event) => void handleSaveSettings({ sample_rate: Number(event.target.value) as Settings["sample_rate"] })}
-                  >
-                    {[16000, 22050, 24000, 44100, 48000].map((rate) => (
-                      <option key={rate} value={rate}>
-                        {rate.toLocaleString()} Hz
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="settings-row">
-                  <span className="settings-label">Bit depth</span>
-                  <select
-                    className="settings-inline-select"
-                    value={settings.bit_depth}
-                    onChange={(event) => void handleSaveSettings({ bit_depth: Number(event.target.value) as Settings["bit_depth"] })}
-                  >
-                    {[16, 24, 32].map((depth) => (
-                      <option key={depth} value={depth}>
-                        {depth}-bit
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {settings.output_format === "wav" ? (
+                  <div className="settings-row">
+                    <span className="settings-label">Bit depth</span>
+                    <select
+                      className="settings-inline-select"
+                      value={settings.bit_depth}
+                      onChange={(event) => void handleSaveSettings({ bit_depth: Number(event.target.value) as Settings["bit_depth"] })}
+                    >
+                      {[16, 24, 32].map((depth) => (
+                        <option key={depth} value={depth}>
+                          {depth}-bit
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
               </div>
             </section>
 
@@ -1554,15 +1512,15 @@ export default function App() {
                   <span className="settings-label">Data location</span>
                 </div>
                 <p className="settings-path">{settings.output_directory}</p>
-                <p className="field-help" style={{ margin: 0 }}>
-                  Working renders live inside the app container. Use Save or Export to copy files out.
-                </p>
               </div>
+              <p className="field-help">
+                Generated audio is stored inside the app container. Use Save or Export to copy files to another location.
+              </p>
             </section>
 
             <section className="settings-footer">
               <strong>Foundry Vox</strong>
-              <span className="muted">Local-first voice forge · Llama + TADA</span>
+              <span className="muted">TADA 1B · 24 kHz · Local inference</span>
             </section>
           </aside>
         </div>
