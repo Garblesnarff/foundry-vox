@@ -1450,113 +1450,120 @@ export default function App() {
               </button>
             </div>
 
-            <section className="settings-block">
-              <p className="eyebrow">Model</p>
-              <div className="toggle-group full-width">
-                {[
-                  { id: "tada-1b", label: "TADA 1B" },
-                  { id: "tada-3b", label: "TADA 3B" },
-                ].map((model) => (
-                  <button
-                    key={model.id}
-                    className={`toggle-button ${settings.model === model.id ? "active" : ""}`}
-                    onClick={() => void handleSaveSettings({ model: model.id as Settings["model"] })}
+            <section className="settings-section">
+              <p className="settings-section-label">Engine</p>
+              <div className="settings-block">
+                <div className="settings-row">
+                  <span className="settings-label">Model</span>
+                  <div className="toggle-group">
+                    {[
+                      { id: "tada-1b", label: "1B" },
+                      { id: "tada-3b", label: "3B" },
+                    ].map((model) => (
+                      <button
+                        key={model.id}
+                        className={`toggle-button ${settings.model === model.id ? "active" : ""}`}
+                        onClick={() => void handleSaveSettings({ model: model.id as Settings["model"] })}
+                      >
+                        {model.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">CPU threads</span>
+                  <div className="settings-slider-group">
+                    <input
+                      className="thread-slider"
+                      type="range"
+                      min={1}
+                      max={16}
+                      value={settings.cpu_threads}
+                      onChange={(event) => setSettings((current) => ({ ...current, cpu_threads: Number(event.target.value) }))}
+                      onMouseUp={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
+                      onTouchEnd={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
+                    />
+                    <strong className="settings-slider-value">{settings.cpu_threads}</strong>
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Warmup on launch</span>
+                  <select
+                    className="settings-inline-select"
+                    value={String(settings.warmup_on_launch)}
+                    onChange={(event) => void handleSaveSettings({ warmup_on_launch: event.target.value === "true" })}
                   >
-                    {model.label}
-                  </button>
-                ))}
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </div>
               </div>
-              <p className="muted">3B aims higher on quality but carries a much heavier local footprint.</p>
             </section>
 
-            <section className="settings-block">
-              <div className="settings-split">
-                <span className="eyebrow">CPU threads</span>
-                <strong>{settings.cpu_threads}</strong>
+            <section className="settings-section">
+              <p className="settings-section-label">Audio output</p>
+              <div className="settings-block">
+                <div className="settings-row">
+                  <span className="settings-label">Format</span>
+                  <select
+                    className="settings-inline-select"
+                    value={settings.output_format}
+                    onChange={(event) => void handleSaveSettings({ output_format: event.target.value as Settings["output_format"] })}
+                  >
+                    {["wav", "mp3", "aac"].map((format) => (
+                      <option key={format} value={format}>
+                        {format.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Sample rate</span>
+                  <select
+                    className="settings-inline-select"
+                    value={settings.sample_rate}
+                    onChange={(event) => void handleSaveSettings({ sample_rate: Number(event.target.value) as Settings["sample_rate"] })}
+                  >
+                    {[16000, 22050, 24000, 44100, 48000].map((rate) => (
+                      <option key={rate} value={rate}>
+                        {rate.toLocaleString()} Hz
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Bit depth</span>
+                  <select
+                    className="settings-inline-select"
+                    value={settings.bit_depth}
+                    onChange={(event) => void handleSaveSettings({ bit_depth: Number(event.target.value) as Settings["bit_depth"] })}
+                  >
+                    {[16, 24, 32].map((depth) => (
+                      <option key={depth} value={depth}>
+                        {depth}-bit
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <input
-                className="thread-slider"
-                type="range"
-                min={1}
-                max={16}
-                value={settings.cpu_threads}
-                onChange={(event) => setSettings((current) => ({ ...current, cpu_threads: Number(event.target.value) }))}
-                onMouseUp={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
-                onTouchEnd={() => void handleSaveSettings({ cpu_threads: settings.cpu_threads })}
-              />
             </section>
 
-            <section className="settings-grid">
-              <label className="control-field">
-                <span>Sample rate</span>
-                <select
-                  value={settings.sample_rate}
-                  onChange={(event) => void handleSaveSettings({ sample_rate: Number(event.target.value) as Settings["sample_rate"] })}
-                >
-                  {[16000, 22050, 24000, 44100, 48000].map((rate) => (
-                    <option key={rate} value={rate}>
-                      {rate} Hz
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="control-field">
-                <span>Bit depth</span>
-                <select
-                  value={settings.bit_depth}
-                  onChange={(event) => void handleSaveSettings({ bit_depth: Number(event.target.value) as Settings["bit_depth"] })}
-                >
-                  {[16, 24, 32].map((depth) => (
-                    <option key={depth} value={depth}>
-                      {depth}-bit
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="control-field">
-                <span>Output format</span>
-                <select
-                  value={settings.output_format}
-                  onChange={(event) => void handleSaveSettings({ output_format: event.target.value as Settings["output_format"] })}
-                >
-                  {["wav", "mp3", "aac"].map((format) => (
-                    <option key={format} value={format}>
-                      {format.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="control-field">
-                <span>Warmup on launch</span>
-                <select
-                  value={String(settings.warmup_on_launch)}
-                  onChange={(event) => void handleSaveSettings({ warmup_on_launch: event.target.value === "true" })}
-                  title="Launch warmup primes the default preset so your first render starts faster."
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-                <p className="field-help">
-                  Launch warmup only primes the default starting voice. Switching to a different voice can still make the first render slower.
+            <section className="settings-section">
+              <p className="settings-section-label">Storage</p>
+              <div className="settings-block">
+                <div className="settings-row">
+                  <span className="settings-label">Data location</span>
+                </div>
+                <p className="settings-path">{settings.output_directory}</p>
+                <p className="field-help" style={{ margin: 0 }}>
+                  Working renders live inside the app container. Use Save or Export to copy files out.
                 </p>
-              </label>
-            </section>
-
-            <section className="settings-block">
-              <p className="eyebrow">Internal storage</p>
-              <div className="inline-path">
-                <input value={settings.output_directory} readOnly />
               </div>
-              <p className="field-help">
-                Foundry Vox keeps working renders inside its app data container. Use Save or Export when you want a copy in a user folder.
-              </p>
             </section>
 
             <section className="settings-footer">
-              <div>
-                <strong>Foundry Vox</strong>
-                <p className="muted">Built with Llama and TADA, packaged for a local-first macOS workflow.</p>
-              </div>
+              <strong>Foundry Vox</strong>
+              <span className="muted">Local-first voice forge · Llama + TADA</span>
             </section>
           </aside>
         </div>
@@ -1568,29 +1575,50 @@ export default function App() {
             <div className="section-header">
               <div>
                 <p className="eyebrow">About</p>
-                <h2>Release context</h2>
+                <h2>Foundry Vox</h2>
               </div>
               <button className="icon-button" onClick={() => setShowAboutPanel(false)}>
                 Close
               </button>
             </div>
-            <article className="about-card">
-              <p className="eyebrow">App shape</p>
-              <h2>Built as an offline desktop forge</h2>
-              <p>
-                Foundry Vox ships as a Tauri macOS app with a bundled local backend, SQLite state, and Apple Silicon
-                inference. The interface is designed to feel like a dedicated desktop tool instead of a generic control panel.
-              </p>
-            </article>
-            <article className="about-card">
-              <p className="eyebrow">Current release notes</p>
-              <h2>Submission still needs hardening</h2>
-              <ul>
-                <li>TADA 1B generation is local and offline once the model is available.</li>
-                <li>Licenses ship with the app resources for final packaging.</li>
-                <li>Sandboxing and App Store packaging still need the engineering pass we discussed.</li>
-              </ul>
-            </article>
+
+            <section className="settings-section">
+              <p className="settings-section-label">Application</p>
+              <div className="settings-block">
+                <div className="settings-row">
+                  <span className="settings-label">Platform</span>
+                  <span className="about-value">macOS (Tauri)</span>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Inference</span>
+                  <span className="about-value">Apple Silicon (local)</span>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Storage</span>
+                  <span className="about-value">SQLite</span>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Network</span>
+                  <span className="about-value">None required</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-section">
+              <p className="settings-section-label">Release status</p>
+              <div className="settings-block">
+                <div className="about-notes">
+                  <p>TADA 1B generation is fully local and offline once the model is downloaded.</p>
+                  <p>Licenses ship with app resources for final packaging.</p>
+                  <p>Sandboxing and App Store packaging still need an engineering pass.</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-footer">
+              <strong>Foundry Vox</strong>
+              <span className="muted">Llama + TADA · All processing on-device</span>
+            </section>
           </aside>
         </div>
       ) : null}
