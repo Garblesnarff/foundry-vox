@@ -985,7 +985,7 @@ export default function App() {
               <article className="latest-render-card" style={{ ["--voice-accent" as string]: accentColor(latestGeneration ? voiceMap.get(latestGeneration.voice_id) : selectedVoice) }}>
                 <div className="section-header">
                   <div>
-                    <p className="eyebrow">{latestGeneration ? `${latestGeneration.voice_name} · ${latestGeneration.quality ?? "balanced"}` : "Latest render"}</p>
+                    <p className="eyebrow" style={latestGeneration ? { color: "var(--voice-accent)" } : undefined}>{latestGeneration ? `${latestGeneration.voice_name} · ${latestGeneration.quality ?? "balanced"}` : "Latest render"}</p>
                     <h3>{latestGeneration ? formatSeconds(latestGeneration.duration_seconds) + " of audio" : "Nothing forged yet"}</h3>
                   </div>
                   {latestGeneration ? (
