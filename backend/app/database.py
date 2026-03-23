@@ -102,7 +102,7 @@ class Database:
                 "SELECT id, name, reference_duration_seconds FROM voices WHERE type = 'preset'"
             )
             existing_by_name = {row["name"]: row for row in existing}
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            now = datetime.datetime.now(datetime.UTC).isoformat()
             for preset in presets:
                 existing_row = existing_by_name.get(preset["name"])
                 if existing_row is not None:

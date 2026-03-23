@@ -1337,6 +1337,33 @@ input::placeholder {
   grid-column: 1 / -1;
 }
 
+.clone-consent {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+
+.clone-consent input {
+  margin-top: 2px;
+  accent-color: var(--gold);
+}
+
+.clone-consent span {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.clone-consent-help {
+  margin-top: -2px;
+}
+
 .metrics-grid,
 .detail-stats,
 .settings-grid,

@@ -9,10 +9,9 @@ import time
 from dataclasses import dataclass
 
 import mlx.core as mx
-import mlx.nn as nn
 
-from .utils import decode_gray_code_to_time
 from .llm import KVCache
+from .utils import decode_gray_code_to_time
 
 
 @dataclass
@@ -239,8 +238,6 @@ def generate(
         # Run prefill
         hidden_states = model.prefill(combined_embeds, cache=cache)
         mx.eval(hidden_states)  # Force evaluation to populate cache
-
-        pos_hidden = hidden_states[:B]
 
         # Collect prefill outputs
         for s in range(prefill_len - 1):

@@ -28,6 +28,14 @@
 - Generated audio, exports, and voice preview flows now route through native shell helpers or local file URLs instead of relying on generic webview fetches.
 - Use [`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md) for the generic App Store review checklist and [`docs/app-store-preflight-foundry-vox.md`](/Users/rob/Claude/vox/docs/app-store-preflight-foundry-vox.md) for the product-specific audit.
 
+## Entitlement rationale
+
+- `com.apple.security.app-sandbox`: required for the App Store build.
+- `com.apple.security.files.user-selected.read-write`: needed for user-picked imports and exports.
+- `com.apple.security.network.client`: currently required because the Tauri shell talks to the bundled backend over authenticated local loopback.
+
+If the shell-to-backend transport changes in the future, re-audit `network.client` before submission.
+
 ## Local model setup
 
 - Foundry Vox prefers local model assets before attempting remote Hugging Face access.

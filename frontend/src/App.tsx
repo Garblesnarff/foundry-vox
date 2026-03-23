@@ -55,7 +55,7 @@ const LOADING_TIPS = [
   "Style Direction is a gentle nudge, not a hard steer. Think of it as mood lighting for the voice.",
   "Longer text generates more efficiently. A full paragraph runs ~3x faster per second of audio than a single sentence.",
   "You can clone any voice from a 10-second audio clip. Longer clips with clear speech give the best results.",
-  "All generation happens locally on your Mac. Nothing leaves your machine \u2014 ever.",
+  "Speech generation runs locally on your Mac. Foundry Vox does not require cloud inference for generation.",
   "The first word of each generation may sound slightly different. This is a known characteristic of the voice engine.",
   "WAV gives you the highest quality. Use MP3 or AAC when you need smaller file sizes.",
   "Try the same text with different voices to hear how much character the voice adds.",
@@ -191,7 +191,9 @@ export default function App() {
   const [cloneGender, setCloneGender] = useState("O");
   const [cloneTags, setCloneTags] = useState("personal, clone");
   const [cloneFile, setCloneFile] = useState<File | null>(null);
+  const [cloneConsentChecked, setCloneConsentChecked] = useState(false);
   const [cloneQuality, setCloneQuality] = useState<string>("");
+  const [supportSnapshotStatus, setSupportSnapshotStatus] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [historySelection, setHistorySelection] = useState<string[]>([]);
   const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
@@ -479,9 +481,19 @@ export default function App() {
     }
   }
 
+  function closeCloneModal() {
+    setCloneOpen(false);
+    setCloneFile(null);
+    setCloneName("");
+    setCloneTranscript("");
+    setCloneGender("O");
+    setCloneTags("personal, clone");
+    setCloneConsentChecked(false);
+  }
+
   async function handleCloneSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!cloneFile || !cloneName.trim()) return;
+    if (!cloneFile || !cloneName.trim() || !cloneConsentChecked) return;
 
     const formData = new FormData();
     formData.append("name", cloneName.trim());
@@ -499,11 +511,7 @@ export default function App() {
       );
       setVoices((current) => [response.voice, ...current]);
       setSelectedVoiceId(response.voice.id);
-      setCloneOpen(false);
-      setCloneFile(null);
-      setCloneName("");
-      setCloneTranscript("");
-      setCloneTags("personal, clone");
+      closeCloneModal();
       setView("library");
     } catch (requestError) {
       setError(humanError(requestError instanceof Error ? requestError.message : "Voice cloning failed."));
@@ -607,6 +615,34 @@ export default function App() {
     } catch {
       setError("Unable to open the models folder.");
     }
+  }
+
+  async function handleCopySupportSnapshot() {
+    const snapshot = [
+      "Foundry Vox support snapshot",
+      `Time: ${new Date().toLocaleString()}`,
+      `Platform: ${health?.platform ?? "unknown"}`,
+      `Engine status: ${health?.status ?? "unknown"}`,
+      `Model: ${health?.model ?? settings.model}`,
+      `Device: ${health?.device ?? "unknown"}`,
+      `Dtype: ${health?.dtype ?? "unknown"}`,
+      `Selected voice: ${selectedVoice?.name ?? "none"}`,
+      `Quality tier: ${selectedQuality}`,
+      `Output format: ${settings.output_format}`,
+      `Sample rate: ${settings.sample_rate}`,
+      `Warmup on launch: ${settings.warmup_on_launch ? "enabled" : "disabled"}`,
+      `Latest render: ${latestGeneration ? `${latestGeneration.voice_name} · ${latestGeneration.rtf.toFixed(2)}x RTF` : "none"}`,
+      `Last error: ${error || "none"}`,
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(snapshot);
+      setSupportSnapshotStatus("Support snapshot copied.");
+    } catch {
+      setSupportSnapshotStatus("Clipboard access was denied.");
+    }
+
+    window.setTimeout(() => setSupportSnapshotStatus(""), 2500);
   }
 
   async function handlePasteScript() {
@@ -1379,7 +1415,7 @@ export default function App() {
                 <p className="eyebrow">Clone voice</p>
                 <h2>Clone a voice</h2>
               </div>
-              <button type="button" className="icon-button" onClick={() => setCloneOpen(false)}>
+              <button type="button" className="icon-button" onClick={closeCloneModal}>
                 Close
               </button>
             </div>
@@ -1405,7 +1441,7 @@ export default function App() {
                   required
                 />
                 <p className="field-help">
-                  Upload a clean audio clip of the voice you want to clone. For best results, use a recording that's at least 10 seconds long with minimal background noise. WAV, MP3, or M4A.
+                  Upload a clean audio clip of the voice you want to clone. For best results, use a recording that's at least 10 seconds long with minimal background noise. WAV, MP3, M4A, or AAC.
                 </p>
               </label>
               <label className="control-field control-field-wide">
@@ -1423,12 +1459,24 @@ export default function App() {
                 <span>Tags</span>
                 <input value={cloneTags} onChange={(event) => setCloneTags(event.target.value)} />
               </label>
+              <label className="clone-consent">
+                <input
+                  type="checkbox"
+                  checked={cloneConsentChecked}
+                  onChange={(event) => setCloneConsentChecked(event.target.checked)}
+                  required
+                />
+                <span>I confirm I have the right to use this recording and create a voice clone from it.</span>
+              </label>
+              <p className="field-help clone-consent-help">
+                Only upload speech you own, created yourself, or have explicit permission to clone.
+              </p>
             </div>
             <div className="button-row">
-              <button className="primary-button" type="submit">
+              <button className="primary-button" type="submit" disabled={!cloneConsentChecked}>
                 Create clone
               </button>
-              <button type="button" className="ghost-button" onClick={() => setCloneOpen(false)}>
+              <button type="button" className="ghost-button" onClick={closeCloneModal}>
                 Cancel
               </button>
             </div>
@@ -1585,20 +1633,65 @@ export default function App() {
                 </div>
                 <div className="settings-row">
                   <span className="settings-label">Network</span>
-                  <span className="about-value">None required</span>
+                  <span className="about-value">Local loopback only</span>
                 </div>
               </div>
             </section>
 
             <section className="settings-section">
-              <p className="settings-section-label">Release status</p>
+              <p className="settings-section-label">Behavior</p>
               <div className="settings-block">
                 <div className="about-notes">
-                  <p>TADA 1B generation is fully local and offline once the model is downloaded.</p>
-                  <p>Licenses ship with app resources for final packaging.</p>
-                  <p>Sandboxing and App Store packaging still need an engineering pass.</p>
+                  <p>Core generation runs locally on your Mac with Apple Silicon inference.</p>
+                  <p>The first render after launch may take longer while the engine warms up.</p>
+                  <p>Switching to a new voice can also make the next render slower while that voice profile is prepared.</p>
                 </div>
               </div>
+            </section>
+
+            <section className="settings-section">
+              <p className="settings-section-label">Privacy</p>
+              <div className="settings-block">
+                <div className="settings-row">
+                  <span className="settings-label">Generation</span>
+                  <span className="about-value">On-device</span>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Storage</span>
+                  <span className="about-value">Local app data only</span>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Network use</span>
+                  <span className="about-value">Local app ↔ engine loopback</span>
+                </div>
+              </div>
+              <p className="field-help">
+                Foundry Vox keeps generation local. The app shell talks to its bundled engine over local loopback on your Mac.
+              </p>
+            </section>
+
+            <section className="settings-section">
+              <p className="settings-section-label">Help</p>
+              <div className="settings-block">
+                <div className="settings-row">
+                  <span className="settings-label">Model files</span>
+                  <button className="micro-button accent" onClick={() => void handleOpenModelsDirectory()}>
+                    Open folder
+                  </button>
+                </div>
+                <div className="settings-row">
+                  <span className="settings-label">Support snapshot</span>
+                  <button className="micro-button accent" onClick={() => void handleCopySupportSnapshot()}>
+                    Copy details
+                  </button>
+                </div>
+              </div>
+              <p className="field-help">
+                If something goes wrong, note your macOS version, selected voice, quality tier, output format, and the approximate time of the issue before asking for support.
+              </p>
+              {supportSnapshotStatus ? (
+                <p className="field-help field-help-emphasis">{supportSnapshotStatus}</p>
+              ) : null}
             </section>
 
             <section className="settings-footer">

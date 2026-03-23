@@ -32,6 +32,10 @@ MODEL_CACHE_NAMES = (
 
 
 def _seed_models_dir(paths: object) -> None:
+    if os.getenv("FOUNDRY_VOX_ENGINE_MODE", "").lower() == "mock":
+        logger.info("Skipping local model seeding in mock engine mode")
+        return
+
     resource_models_dir = getattr(paths, "resource_models_dir", None)
     source_roots = []
     if resource_models_dir and resource_models_dir.exists():

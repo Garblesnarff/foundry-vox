@@ -31,7 +31,7 @@ These display below the progress bar during model loading/warmup:
 3. "Style Direction is a gentle nudge, not a hard steer. Think of it as mood lighting for the voice."
 4. "Longer text generates more efficiently. A full paragraph runs ~3x faster per second of audio than a single sentence."
 5. "You can clone any voice from a 10-second audio clip. Longer clips with clear speech give the best results."
-6. "All generation happens locally on your Mac. Nothing leaves your machine — ever."
+6. "Speech generation runs locally on your Mac. Foundry Vox does not require cloud inference for generation."
 7. "The first word of each generation may sound slightly different. This is a known characteristic of the voice engine."
 8. "WAV gives you the highest quality. Use MP3 or AAC when you need smaller file sizes."
 9. "Try the same text with different voices to hear how much character the voice adds."
@@ -98,6 +98,8 @@ These map to the SSE progress events:
 - Body: "Upload a clean audio clip of the voice you want to clone. For best results, use a recording that's at least 10 seconds long with minimal background noise."
 - Upload button: "Choose Audio File"
 - Supported formats note: "WAV, MP3, or M4A"
+- Rights acknowledgment: "I confirm I have the right to use this recording and create a voice clone from it."
+- Rights help text: "Only upload speech you own, created yourself, or have explicit permission to clone."
 
 **Step 2: Quality Feedback (shown after upload)**
 

@@ -219,7 +219,7 @@ class LlamaModel(nn.Module):
                 prefix = mx.zeros((L, cached_len))
                 mask = mx.concatenate([prefix, mask], axis=1)
 
-        for layer, c in zip(self.layers, cache):
+        for layer, c in zip(self.layers, cache, strict=False):
             h = layer(h, mask=mask, cache=c)
 
         return self.norm(h)

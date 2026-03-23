@@ -271,15 +271,16 @@ class TadaEngine:
 
         logger.info("Converting TADA weights to MLX format...")
         try:
+            import json
+
+            import mlx.core as mx
+
             from .mlx_tada.convert_weights import (
                 load_decoder_weights,
                 load_pytorch_weights,
                 map_decoder_weights,
                 map_llama_weights,
             )
-
-            import mlx.core as mx
-            import json
 
             pt_weights = load_pytorch_weights(
                 repo_id=f"HumeAI/{self.model_name}",
