@@ -40,7 +40,6 @@ Foundry Vox is a local macOS text-to-speech and voice-cloning app for Apple Sili
 Fill before submission:
 
 - Build identifier:
-- Privacy policy URL:
-- Support URL/contact:
+- Privacy policy URL: https://garblesnarff.github.io/foundry-vox/privacy-policy
+- Support URL/contact: https://garblesnarff.github.io/foundry-vox/support
 - Any temporary reviewer-specific note:
-

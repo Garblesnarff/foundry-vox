@@ -25,4 +25,6 @@ against the signed App Store build, not `tauri dev`.
   explains that it exists for app-internal local loopback.
 - Verify all “offline”, “private”, “local”, and “on-device” claims against the
   signed App Store build.
-
+- Verify the live public pages match:
+  - [`docs/privacy-policy.md`](/Users/rob/Claude/vox/docs/privacy-policy.md)
+  - [`docs/support.md`](/Users/rob/Claude/vox/docs/support.md)

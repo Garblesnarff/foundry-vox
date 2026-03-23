@@ -23,8 +23,8 @@ Pass only if all inputs below are present and final:
 | --- | --- | --- |
 | Signing identities | Final App Store signing identities available locally | `security find-identity -v -p codesigning` output captured |
 | Provisioning profile | Correct App Store provisioning profile installed | profile identifier recorded |
-| Privacy policy URL | Public and final | URL loads in browser |
-| Support URL/contact | Public and final | URL/email loads or resolves |
+| Privacy policy URL | Public and final | URL loads in browser; current target tracked in [`docs/public-links.md`](/Users/rob/Claude/vox/docs/public-links.md) |
+| Support URL/contact | Public and final | URL/email loads or resolves; current target tracked in [`docs/public-links.md`](/Users/rob/Claude/vox/docs/public-links.md) |
 | Reviewer notes draft | Final text prepared | Filled template from [`docs/app-store-review-notes-template.md`](/Users/rob/Claude/vox/docs/app-store-review-notes-template.md) |
 | Asset rights list | Complete for every bundled preset/reference asset | Filled worksheet from [`docs/preset-asset-rights.md`](/Users/rob/Claude/vox/docs/preset-asset-rights.md) |
 | Metadata set | Final name, subtitle, description, screenshots, age rating, privacy answers | App Store Connect draft reviewed against current build |
@@ -141,6 +141,9 @@ Required checks:
 - screenshots are captured from the exact review build
 - support/privacy URLs in metadata are public and current
 - age rating/category reflect the actual app
+- the live public policy/support pages match the repo-owned source copy in:
+  - [`docs/privacy-policy.md`](/Users/rob/Claude/vox/docs/privacy-policy.md)
+  - [`docs/support.md`](/Users/rob/Claude/vox/docs/support.md)
 
 Special attention items for Foundry Vox:
 - do not imply “nothing leaves your machine” unless it is still literally true for the shipping binary

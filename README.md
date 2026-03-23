@@ -18,6 +18,7 @@ The frontend no longer behaves like a generic localhost web client. Core app sta
 - [`docs/app-store-runbook.md`](/Users/rob/Claude/vox/docs/app-store-runbook.md): canonical App Store submission runbook and pass/fail gate
 - [`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md): reusable App Store rejection guide for future apps
 - [`docs/app-store-preflight-foundry-vox.md`](/Users/rob/Claude/vox/docs/app-store-preflight-foundry-vox.md): Foundry Vox-specific App Store submission checklist
+- [`docs/public-links.md`](/Users/rob/Claude/vox/docs/public-links.md): current privacy/support URL targets and source pages
 
 ## Verified locally
 

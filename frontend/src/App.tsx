@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { api } from "./lib/api";
+import { PUBLIC_LINKS } from "./lib/publicLinks";
 import { QUALITY_PRESETS, speedHint } from "./lib/qualityPresets";
 import FabricTabs from "./components/FabricTabs";
 import ForgeVisualizer from "./components/ForgeVisualizer";
@@ -614,6 +615,14 @@ export default function App() {
       await invoke("open_models_directory");
     } catch {
       setError("Unable to open the models folder.");
+    }
+  }
+
+  async function handleOpenExternalLink(url: string, label: string) {
+    try {
+      await api.openExternalUrl(url);
+    } catch {
+      setError(`Unable to open ${label}.`);
     }
   }
 
@@ -1664,6 +1673,15 @@ export default function App() {
                   <span className="settings-label">Network use</span>
                   <span className="about-value">Local app ↔ engine loopback</span>
                 </div>
+                <div className="settings-row">
+                  <span className="settings-label">Policy</span>
+                  <button
+                    className="micro-button accent"
+                    onClick={() => void handleOpenExternalLink(PUBLIC_LINKS.privacyPolicy, "the privacy policy")}
+                  >
+                    Privacy Policy
+                  </button>
+                </div>
               </div>
               <p className="field-help">
                 Foundry Vox keeps generation local. The app shell talks to its bundled engine over local loopback on your Mac.
@@ -1685,9 +1703,18 @@ export default function App() {
                     Copy details
                   </button>
                 </div>
+                <div className="settings-row">
+                  <span className="settings-label">Support</span>
+                  <button
+                    className="micro-button accent"
+                    onClick={() => void handleOpenExternalLink(PUBLIC_LINKS.support, "the support page")}
+                  >
+                    Contact support
+                  </button>
+                </div>
               </div>
               <p className="field-help">
-                If something goes wrong, note your macOS version, selected voice, quality tier, output format, and the approximate time of the issue before asking for support.
+                If something goes wrong, copy a support snapshot first, then use the public support page to send your report.
               </p>
               {supportSnapshotStatus ? (
                 <p className="field-help field-help-emphasis">{supportSnapshotStatus}</p>

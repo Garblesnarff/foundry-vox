@@ -189,6 +189,17 @@ fn open_models_directory(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only http and https URLs are allowed.".to_string());
+    }
+
+    app.opener()
+        .open_path(url, None::<String>)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn backend_get_settings(
     runtime: State<'_, RuntimeState>,
     client: State<'_, BackendClient>,
@@ -752,6 +763,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             open_models_directory,
+            open_external_url,
             backend_get_health,
             backend_get_settings,
             backend_patch_settings,

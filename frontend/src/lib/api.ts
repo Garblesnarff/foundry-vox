@@ -41,6 +41,7 @@ async function invokeBackend<T>(command: string, payload?: Record<string, unknow
 
 export const api = {
   init: async () => undefined,
+  openExternalUrl: (url: string) => invoke<void>("open_external_url", { url }),
   getHealth: () => invokeBackend<HealthResponse>("backend_get_health"),
   getVoices: (type?: "preset" | "clone") =>
     invokeBackend<{ voices: Voice[] }>("backend_get_voices", { voiceType: type ?? null }),
