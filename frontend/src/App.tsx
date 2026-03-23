@@ -662,7 +662,7 @@ export default function App() {
           </div>
         </div>
 
-        <FabricTabs views={TOP_LEVEL_VIEWS} activeView={view} onViewChange={setView} />
+        <FabricTabs views={TOP_LEVEL_VIEWS} activeView={view} onViewChange={(id) => setView(id as View)} />
 
         <div className="chrome-right">
           <div className="engine-pill">

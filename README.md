@@ -15,6 +15,8 @@ The frontend no longer behaves like a generic localhost web client. Core app sta
 - [`backend`](/Users/rob/Claude/vox/backend): FastAPI backend, SQLite persistence, TADA engine integration
 - [`src-tauri`](/Users/rob/Claude/vox/src-tauri): native macOS shell, sidecar bundling, App Store config
 - [`docs/release.md`](/Users/rob/Claude/vox/docs/release.md): release and App Store notes
+- [`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md): reusable App Store rejection guide for future apps
+- [`docs/app-store-preflight-foundry-vox.md`](/Users/rob/Claude/vox/docs/app-store-preflight-foundry-vox.md): Foundry Vox-specific App Store submission checklist
 
 ## Verified locally
 

@@ -380,35 +380,12 @@ class MLXInferenceCore:
         device: str = "cpu",
         dtype: Any = None,
     ) -> None:
-        """Run warmup generations to prime Metal kernel caches.
-
-        A short prompt alone doesn't compile kernels for longer sequences.
-        Running progressively longer prompts ensures steady-state performance
-        from the first real generation.
-        """
-        logger.info("MLX warmup (3-stage)...")
+        """Run a short warmup generation to prime Metal caches."""
+        logger.info("MLX warmup...")
         self.generate(
             prompt=prompt,
             text="Hi.",
             num_transition_steps=0,
-            config=config,
-            decoder=decoder,
-            device=device,
-            dtype=dtype,
-        )
-        self.generate(
-            prompt=prompt,
-            text="This is a warmup sentence to compile Metal kernels for longer sequences.",
-            num_transition_steps=5,
-            config=config,
-            decoder=decoder,
-            device=device,
-            dtype=dtype,
-        )
-        self.generate(
-            prompt=prompt,
-            text="And this is a third warmup prompt that is even longer to ensure the decoder kernels are also compiled for various audio lengths and durations.",
-            num_transition_steps=5,
             config=config,
             decoder=decoder,
             device=device,
