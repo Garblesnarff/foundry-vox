@@ -1,5 +1,10 @@
 # Foundry Vox Release Notes
 
+The canonical App Store submission process now lives in
+[`docs/app-store-runbook.md`](/Users/rob/Claude/vox/docs/app-store-runbook.md).
+Use this file for build/reference notes, and use the runbook for the actual
+submission gate.
+
 ## Local build
 
 1. `npm install`
@@ -18,7 +23,7 @@
 5. Run `npm run tauri:build:appstore`
 6. Build the signed App Store installer package:
    `APP_SIGN_IDENTITY="Apple Distribution: Your Name (TEAMID)" INSTALLER_SIGN_IDENTITY="3rd Party Mac Developer Installer: Your Name (TEAMID)" npm run package:appstore`
-7. Run the App Store preflight audit in [`docs/app-store-preflight-foundry-vox.md`](/Users/rob/Claude/vox/docs/app-store-preflight-foundry-vox.md) before submitting the signed build.
+7. Run the full submission gate in [`docs/app-store-runbook.md`](/Users/rob/Claude/vox/docs/app-store-runbook.md) before submitting the signed build.
 
 ## Runtime shape
 
@@ -26,7 +31,7 @@
 - The Python backend still exists, but it now sits behind Tauri commands for the main product flows instead of exposing a browser-style app surface.
 - The packaged backend runs on a dynamic loopback port with runtime token auth.
 - Generated audio, exports, and voice preview flows now route through native shell helpers or local file URLs instead of relying on generic webview fetches.
-- Use [`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md) for the generic App Store review checklist and [`docs/app-store-preflight-foundry-vox.md`](/Users/rob/Claude/vox/docs/app-store-preflight-foundry-vox.md) for the product-specific audit.
+- Use [`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md) for the reusable rejection guide, [`docs/app-store-preflight-foundry-vox.md`](/Users/rob/Claude/vox/docs/app-store-preflight-foundry-vox.md) for the product-specific risk audit, and [`docs/app-store-runbook.md`](/Users/rob/Claude/vox/docs/app-store-runbook.md) for the actual release gate.
 
 ## Entitlement rationale
 

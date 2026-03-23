@@ -1,6 +1,12 @@
 # Foundry Vox App Store Preflight
 
-This is the product-specific App Store submission audit for Foundry Vox. It applies the generic rejection map in [`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md) to the current codebase and packaging model.
+This file is the product-specific risk audit for Foundry Vox.
+For the actual submission process and pass/fail release gate, use
+[`docs/app-store-runbook.md`](/Users/rob/Claude/vox/docs/app-store-runbook.md).
+
+It applies the generic rejection map in
+[`docs/app-store-rejection-map.md`](/Users/rob/Claude/vox/docs/app-store-rejection-map.md)
+to the current codebase and packaging model.
 
 Primary Apple references:
 - [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
