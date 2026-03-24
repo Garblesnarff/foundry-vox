@@ -9,6 +9,8 @@
     "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:backend\"",
     "build:web": "npm --prefix frontend run build",
     "build:sidecar": "sh ./scripts/build-sidecar.sh",
+    "audit:preset-assets": "uv run --project backend python backend/verify_preset_assets.py",
+    "audit:preset-assets:strict": "uv run --project backend python backend/verify_preset_assets.py --strict",
     "bench:engine": "uv run --project backend python backend/benchmark_mlx_rtf.py",
     "bench:engine:report": "uv run --project backend python backend/benchmark_mlx_rtf.py --skip-checks",
     "package:appstore": "./scripts/package_appstore.sh",

@@ -1,0 +1,157 @@
+[
+  {
+    "name": "Warm Narrator",
+    "reference_file": "warm-narrator.wav",
+    "file_path": "backend/app/presets/audio/warm-narrator.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Bright Host",
+    "reference_file": "bright-host.wav",
+    "file_path": "backend/app/presets/audio/bright-host.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Deep Anchor",
+    "reference_file": "deep-anchor.wav",
+    "file_path": "backend/app/presets/audio/deep-anchor.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Gentle Reader",
+    "reference_file": "gentle-reader.wav",
+    "file_path": "backend/app/presets/audio/gentle-reader.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Crisp Lecturer",
+    "reference_file": "crisp-lecturer.wav",
+    "file_path": "backend/app/presets/audio/crisp-lecturer.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Velvet Evening",
+    "reference_file": "velvet-evening.wav",
+    "file_path": "backend/app/presets/audio/velvet-evening.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Young Storyteller",
+    "reference_file": "young-storyteller.wav",
+    "file_path": "backend/app/presets/audio/young-storyteller.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Wise Elder",
+    "reference_file": "wise-elder.wav",
+    "file_path": "backend/app/presets/audio/wise-elder.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "News Anchor",
+    "reference_file": "news-anchor.wav",
+    "file_path": "backend/app/presets/audio/news-anchor.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Noir Detective",
+    "reference_file": "noir-detective.wav",
+    "file_path": "backend/app/presets/audio/noir-detective.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Cheerful Teacher",
+    "reference_file": "cheerful-teacher.wav",
+    "file_path": "backend/app/presets/audio/cheerful-teacher.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Epic Trailer",
+    "reference_file": "epic-trailer.wav",
+    "file_path": "backend/app/presets/audio/epic-trailer.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Soothing Guide",
+    "reference_file": "soothing-guide.wav",
+    "file_path": "backend/app/presets/audio/soothing-guide.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  },
+  {
+    "name": "Bold Commercial",
+    "reference_file": "bold-commercial.wav",
+    "file_path": "backend/app/presets/audio/bold-commercial.wav",
+    "asset_type": "preset_wav",
+    "source_creator": "",
+    "rights_owner": "",
+    "approval_status": "pending_replacement",
+    "approval_date": "",
+    "notes": "Current bundled preset is a development placeholder and must be replaced or rights-cleared before App Store submission."
+  }
+]
+
